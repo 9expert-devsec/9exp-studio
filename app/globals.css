@@ -20,6 +20,23 @@
   /* Base surfaces */
   --color-navy: #0d1b2a; /* sidebar / header base */
   --color-surface-dark: #1e2a3b; /* cards in dark mode */
+
+  /* Logo play-triangle: gentle pulse/glow every 2.5s */
+  --animate-logo-pulse: logo-pulse 2.5s ease-in-out infinite;
+
+  @keyframes logo-pulse {
+    0%,
+    100% {
+      opacity: 0.85;
+      transform: scale(1);
+      filter: drop-shadow(0 0 0 transparent);
+    }
+    50% {
+      opacity: 1;
+      transform: scale(1.12);
+      filter: drop-shadow(0 0 6px var(--color-brand-500));
+    }
+  }
 }
 
 /* Font stack: English first, then Thai. Variables are set by next/font in app/layout.js. */
