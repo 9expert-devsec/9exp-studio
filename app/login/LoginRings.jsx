@@ -3,9 +3,14 @@
 import { useSyncExternalStore } from "react";
 import MagicRings from "@/components/effects/MagicRings";
 
-// MagicRings sizes rings from min(width, height). On a portrait phone that is the
-// width, so the desktop radii end up hidden behind the card. Narrow viewports get
-// larger radii so the rings show as arcs above and below the card.
+// Desktop: rings centred on the viewport (approved; do not change).
+//
+// Mobile (< 640px): the React Bits mobile look — wide soft arcs above the card,
+// glowing upward. MagicRings draws each ring as an arc whose brightness peaks along
+// the rotation axis (both ends), so rotation 90 puts the arcs top and bottom. The
+// ring centre is always the container centre, so the container is made 170dvh tall
+// (centre at 85dvh) and the bottom arcs fall below the fold. The unit stays
+// min(width, height) = screen width.
 
 const BASE_PROPS = {
   color: "#fb923c",
@@ -22,7 +27,17 @@ const BASE_PROPS = {
 };
 
 const DESKTOP = { ...BASE_PROPS, baseRadius: 0.35, radiusStep: 0.12 };
-const MOBILE = { ...BASE_PROPS, baseRadius: 0.55, radiusStep: 0.18 };
+const MOBILE = {
+  ...BASE_PROPS,
+  rotation: 90,
+  baseRadius: 1.25,
+  radiusStep: 0.14,
+  glow: 1.4,
+  ringCount: 4,
+};
+
+const DESKTOP_WRAPPER = "fixed inset-0 z-0";
+const MOBILE_WRAPPER = "pointer-events-none fixed left-0 top-0 z-0 h-[170dvh] w-full";
 
 const QUERY = "(max-width: 639px)";
 
@@ -38,5 +53,9 @@ const getServerSnapshot = () => false;
 
 export default function LoginRings() {
   const isMobile = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
-  return <MagicRings {...(isMobile ? MOBILE : DESKTOP)} />;
+  return (
+    <div className={isMobile ? MOBILE_WRAPPER : DESKTOP_WRAPPER}>
+      <MagicRings {...(isMobile ? MOBILE : DESKTOP)} />
+    </div>
+  );
 }

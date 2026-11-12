@@ -13,9 +13,8 @@ export const viewport = {
 export default function LoginPage() {
   return (
     <div className="relative min-h-dvh flex-1 bg-[#0D0D12]">
-      <div className="fixed inset-0 z-0">
-        <LoginRings />
-      </div>
+      {/* Renders its own fixed z-0 wrapper (geometry switches with the breakpoint). */}
+      <LoginRings />
 
       {/* min-h-dvh (not 100vh) and no overflow-hidden: the page scrolls if the card is
           taller than the viewport. env() insets are 0 on desktop, so ≥640px is unchanged. */}
