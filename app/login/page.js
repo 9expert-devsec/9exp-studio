@@ -20,7 +20,7 @@ export default function LoginPage() {
           hoverScale={1}
           clickBurst={false}
           baseRadius={0.35}
-          radiusStep={0.06}
+          radiusStep={0.12}
           hoverIntensity={0.2}
           parallax={0}
         />
@@ -28,7 +28,7 @@ export default function LoginPage() {
 
       <main className="relative z-10 flex min-h-dvh items-center justify-center py-10">
         {/* Opaque card on top of the full-viewport rings. */}
-        <div className="mx-4 w-full max-w-[640px] rounded-3xl border border-white/10 bg-[#1e1e1e] px-6 py-8 shadow-2xl shadow-black/50 sm:px-12 sm:py-12">
+        <div className="mx-4 w-full max-w-[448px] rounded-3xl border border-white/10 bg-[#1e1e1e] px-6 py-8 shadow-2xl shadow-black/50 sm:px-10 sm:py-12">
           <LoginForm />
         </div>
       </main>

@@ -28,7 +28,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <form action={formAction} className="mx-auto flex w-full max-w-[450px] flex-col gap-4">
+    <form action={formAction} className="flex w-full flex-col gap-4">
       <div className="mb-4 flex justify-center">
         <StudioLogo size="lg" />
       </div>
@@ -87,11 +87,14 @@ export default function LoginForm() {
         {isPending ? STRINGS.submitting : STRINGS.submit}
       </button>
 
-      <p aria-live="polite" className="min-h-5 text-center text-sm text-red-400">
-        {state?.error ?? ""}
-      </p>
-
-      <p className="text-center text-xs text-white/40">{STRINGS.adminNote}</p>
+      {/* Error line is always in the DOM (for aria-live) but takes no space when empty,
+          so the note sits one field-gap below the button. */}
+      <div className="flex flex-col">
+        <p aria-live="polite" className="text-center text-sm text-red-400 not-empty:mb-2">
+          {state?.error ?? ""}
+        </p>
+        <p className="text-center text-xs text-white/40">{STRINGS.adminNote}</p>
+      </div>
     </form>
   );
 }
