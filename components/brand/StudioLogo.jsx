@@ -30,7 +30,7 @@ export default function StudioLogo({ size = "md", className = "" }) {
       <span aria-hidden="true" className={`w-px ${s.divider} bg-white/30`} />
       <span
         aria-hidden="true"
-        className={`flex flex-col font-sans font-bold leading-[0.95] tracking-tight text-white ${s.text}`}
+        className={`flex flex-col font-en font-bold leading-[0.95] tracking-tight text-white ${s.text}`}
       >
         <span>9Expert</span>
         <span className="inline-flex items-center gap-1.5">

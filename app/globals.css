@@ -39,12 +39,31 @@
   }
 }
 
-/* Font stack: English first, then Thai. Variables are set by next/font in app/layout.js. */
+/* Font families: same names, order and fallbacks as genesis-lab's tailwind.config.js.
+   --font-google-sans / --font-line-seed are injected on <html> by next/font/local
+   (app/layout.js). Utilities: font-sans, font-en, font-thai, font-heading. */
 @theme inline {
-  --font-sans: var(--font-en), var(--font-th), ui-sans-serif, system-ui,
-    sans-serif;
+  --font-sans: "Google Sans", var(--font-google-sans), "LINE Seed Sans TH",
+    var(--font-line-seed), sans-serif;
+  --font-en: "Google Sans", var(--font-google-sans), sans-serif;
+  --font-thai: "LINE Seed Sans TH", var(--font-line-seed), sans-serif;
+  --font-heading: "LINE Seed Sans TH", var(--font-line-seed), "Google Sans",
+    var(--font-google-sans), sans-serif;
 }
 
-body {
-  font-family: var(--font-sans);
+@layer base {
+  body {
+    font-family: var(--font-sans);
+  }
+
+  /* Headings use LINE Seed Sans TH, locked at bold (as in genesis-lab). */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+  }
 }
