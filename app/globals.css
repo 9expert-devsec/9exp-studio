@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: add `dark` to <html> (or any ancestor). */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Interim design tokens — the final UI will come from Figma. */
+@theme {
+  /* Brand orange */
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-200: #fed7aa;
+  --color-brand-300: #fdba74;
+  --color-brand-400: #fb923c;
+  --color-brand-500: #f97316; /* primary */
+  --color-brand-600: #ea580c;
+  --color-brand-700: #c2410c;
+  --color-brand-800: #9a3412;
+  --color-brand-900: #7c2d12;
+
+  /* Base surfaces */
+  --color-navy: #0d1b2a; /* sidebar / header base */
+  --color-surface-dark: #1e2a3b; /* cards in dark mode */
+}
+
+/* Font stack: English first, then Thai. Variables are set by next/font in app/layout.js. */
+@theme inline {
+  --font-sans: var(--font-en), var(--font-th), ui-sans-serif, system-ui,
+    sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
