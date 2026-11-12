@@ -18,8 +18,10 @@ const STRINGS = {
   adminNote: "Accounts are created by an administrator.",
 };
 
+// text-base (16px) below sm stops iOS Safari zooming on focus; desktop stays text-sm.
+// At 16px the field is 46px tall, so the inset eye toggle (w-11, full height) is ≥44×44.
 const inputClass =
-  "w-full rounded-lg border border-white/10 bg-[#2a2a2a] px-3.5 py-2.5 text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+  "w-full rounded-lg border border-white/10 bg-[#2a2a2a] px-3.5 py-2.5 text-base sm:text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 export default function LoginForm() {
   const [state, formAction, isPending] = useActionState(loginAction, {
@@ -81,7 +83,7 @@ export default function LoginForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-brand-500"
+        className="mt-2 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-base font-semibold sm:min-h-0 sm:text-sm text-white transition-colors hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-300 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-brand-500"
       >
         {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
         {isPending ? STRINGS.submitting : STRINGS.submit}

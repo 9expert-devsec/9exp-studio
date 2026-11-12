@@ -21,7 +21,8 @@
   --color-navy: #0d1b2a; /* sidebar / header base */
   --color-surface-dark: #1e2a3b; /* cards in dark mode */
 
-  /* Logo play-triangle: gentle pulse/glow every 2.5s */
+  /* Logo play-triangle: gentle pulse every 2.5s. Transform/opacity only, so the
+     layout box never changes. */
   --animate-logo-pulse: logo-pulse 2.5s ease-in-out infinite;
 
   @keyframes logo-pulse {
@@ -29,12 +30,10 @@
     100% {
       opacity: 0.85;
       transform: scale(1);
-      filter: drop-shadow(0 0 0 transparent);
     }
     50% {
       opacity: 1;
       transform: scale(1.12);
-      filter: drop-shadow(0 0 6px var(--color-brand-500));
     }
   }
 }
