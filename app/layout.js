@@ -34,12 +34,21 @@ export const metadata = {
   title: "9Expert Studio",
 };
 
+// Sets the theme class before first paint (no flash). Stored choice wins, else
+// the system preference. Must stay in sync with components/shell/ThemeToggle.jsx.
+const THEME_SCRIPT = `(function(){try{var t=localStorage.getItem("theme");var d=t?t==="dark":matchMedia("(prefers-color-scheme: dark)").matches;document.documentElement.classList.toggle("dark",d)}catch(e){}})()`;
+
 export default function RootLayout({ children }) {
   return (
     <html
       lang="th"
       className={`${googleSans.variable} ${lineSeedSansTH.variable} h-full antialiased`}
+      // The theme script adds/removes `dark` before React hydrates.
+      suppressHydrationWarning
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="min-h-full flex flex-col">{children}</body>
     </html>
   );
