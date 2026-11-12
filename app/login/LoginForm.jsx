@@ -19,7 +19,7 @@ const STRINGS = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-white/10 bg-white/5 px-3.5 py-2.5 text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
+  "w-full rounded-lg border border-white/10 bg-[#2a2a2a] px-3.5 py-2.5 text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-brand-500 focus:ring-1 focus:ring-brand-500";
 
 export default function LoginForm() {
   const [state, formAction, isPending] = useActionState(loginAction, {
@@ -28,7 +28,7 @@ export default function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
 
   return (
-    <form action={formAction} className="flex w-full max-w-[360px] flex-col gap-4">
+    <form action={formAction} className="mx-auto flex w-full max-w-[450px] flex-col gap-4">
       <div className="mb-4 flex justify-center">
         <StudioLogo size="lg" />
       </div>
