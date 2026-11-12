@@ -8,7 +8,7 @@ import { loginAction } from "./actions";
 // UI strings in one place so they can be translated later.
 const STRINGS = {
   emailLabel: "Email",
-  emailPlaceholder: "you@9expert.co.th",
+  emailPlaceholder: "Email",
   passwordLabel: "Password",
   passwordPlaceholder: "Password",
   showPassword: "Show password",
