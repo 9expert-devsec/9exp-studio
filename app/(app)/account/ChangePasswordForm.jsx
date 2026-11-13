@@ -1,14 +1,11 @@
 "use client";
 
 import { startTransition, useActionState, useState } from "react";
-import { CircleCheck, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { buttonClass } from "@/components/ui/Button";
 import PasswordInput from "@/components/ui/PasswordInput";
+import { PasswordMatch, PasswordRules } from "@/components/ui/PasswordRules";
 import { changePasswordAction } from "./actions";
-
-const MIN_LENGTH = 10;
-const MAX_BYTES = 72;
-const byteLength = (s) => new TextEncoder().encode(s).length;
 
 export default function ChangePasswordForm() {
   const [currentPassword, setCurrentPassword] = useState("");
@@ -33,9 +30,7 @@ export default function ChangePasswordForm() {
     startTransition(() => formAction(formData));
   };
 
-  // Client-side checks are UX only; the server action re-validates everything.
-  const longEnough = newPassword.length >= MIN_LENGTH;
-  const tooLong = byteLength(newPassword) > MAX_BYTES;
+  // UX only; the server action re-validates with the same rules (lib/password.js).
   const mismatch = confirmPassword.length > 0 && confirmPassword !== newPassword;
 
   return (
@@ -61,20 +56,7 @@ export default function ChangePasswordForm() {
           value={newPassword}
           onChange={(e) => setNewPassword(e.target.value)}
         />
-        <p
-          id="newPassword-hint"
-          aria-live="polite"
-          className={`mt-1.5 flex items-center gap-1.5 text-xs ${
-            tooLong
-              ? "text-danger"
-              : longEnough
-                ? "text-success"
-                : "text-fg-muted"
-          }`}
-        >
-          {longEnough && !tooLong && <CircleCheck className="size-3.5" aria-hidden="true" />}
-          {tooLong ? "Too long (max 72 bytes)" : "At least 10 characters"}
-        </p>
+        <PasswordRules id="newPassword-hint" password={newPassword} />
       </div>
 
       <div>
@@ -89,13 +71,7 @@ export default function ChangePasswordForm() {
           value={confirmPassword}
           onChange={(e) => setConfirmPassword(e.target.value)}
         />
-        <p
-          id="confirmPassword-hint"
-          aria-live="polite"
-          className="mt-1.5 min-h-4 text-xs text-danger"
-        >
-          {mismatch ? "Passwords do not match." : ""}
-        </p>
+        <PasswordMatch id="confirmPassword-hint" password={newPassword} confirm={confirmPassword} />
       </div>
 
       <button
