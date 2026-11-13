@@ -1,9 +1,11 @@
 // Server components that read the session. Each is rendered inside <Suspense>
 // by app/(app)/layout.js (required under cacheComponents).
 
+import mongoose from "mongoose";
 import { auth, signOut } from "@/auth";
 import dbConnect from "@/lib/db";
 import Role from "@/models/Role";
+import User from "@/models/User";
 import TeamNavLink from "./TeamNavLink";
 import UserMenu from "./UserMenu";
 
@@ -15,16 +17,22 @@ export async function TeamNavItem() {
   return <TeamNavLink />;
 }
 
-// Display name for a role key (the pill shows "Super Admin", not "superadmin").
-// Falls back to the key if the role doc is missing or the DB is unreachable.
-async function roleNameFor(key) {
-  if (!key) return "";
+// Display data read from the DB (not the JWT): the role's name ("Super Admin", not
+// "superadmin") and the avatar URL. Falls back to the key / initials if a doc is
+// missing or the DB is unreachable.
+async function pillDataFor(userId, roleKey) {
+  const fallback = { roleName: roleKey ?? "", avatarUrl: null };
   try {
     await dbConnect();
-    const role = await Role.findOne({ key }).select("name").lean();
-    return role?.name ?? key;
+    const [role, me] = await Promise.all([
+      roleKey ? Role.findOne({ key: roleKey }).select("name").lean() : null,
+      userId && mongoose.isValidObjectId(userId)
+        ? User.findById(userId).select("avatar.url").lean()
+        : null,
+    ]);
+    return { roleName: role?.name ?? fallback.roleName, avatarUrl: me?.avatar?.url ?? null };
   } catch {
-    return key;
+    return fallback;
   }
 }
 
@@ -38,13 +46,11 @@ export async function UserMenuSlot() {
     await signOut({ redirectTo: "/login" });
   }
 
+  const { roleName, avatarUrl } = await pillDataFor(user.id, user.role);
+
   return (
     <UserMenu
-      user={{
-        name: user.name ?? "",
-        email: user.email ?? "",
-        roleName: await roleNameFor(user.role),
-      }}
+      user={{ name: user.name ?? "", email: user.email ?? "", roleName, avatarUrl }}
       signOutAction={signOutAction}
     />
   );

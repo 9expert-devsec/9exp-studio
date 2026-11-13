@@ -1,11 +1,14 @@
 "use server";
 
 // Every export of a "use server" module is a public POST endpoint.
-// Export ONLY changePasswordAction; keep helpers module-private.
+// Export ONLY changePasswordAction, updateMyAvatarAction and removeMyAvatarAction;
+// keep helpers module-private. All three act ONLY on the session's own user id.
 
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
+import { refresh } from "next/cache";
 import { auth } from "@/auth";
+import { readAvatarFile, removeAvatar, replaceAvatar } from "@/lib/avatar";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
 
@@ -68,4 +71,40 @@ export async function changePasswordAction(_prevState, formData) {
   // checked at the edge with no DB lookup, so there is nothing to revoke yet.
   // (A later fix: compare token iat with passwordChangedAt on a server check.)
   return { ok: true };
+}
+
+// The caller's own active user id from the session, or null.
+async function myUserId() {
+  const session = await auth();
+  const userId = session?.user?.id;
+  if (!userId || !mongoose.isValidObjectId(userId)) return null;
+  await dbConnect();
+  const me = await User.findById(userId).select("isActive").lean();
+  return me?.isActive ? me._id : null;
+}
+
+const SESSION_EXPIRED = "Your session has expired. Please sign in again.";
+
+// Profile picture: validated server-side (magic bytes, ≤ 1 MB, ≤ 1024px), then
+// uploaded to Cloudinary and saved. refresh() re-renders the server components so
+// the header pill and user menu show the new picture without a reload.
+export async function updateMyAvatarAction(formData) {
+  const userId = await myUserId();
+  if (!userId) return fail(SESSION_EXPIRED);
+
+  const file = await readAvatarFile(formData);
+  if (file.error) return fail(file.error);
+
+  const result = await replaceAvatar(userId, file.buffer);
+  if (result.ok) refresh();
+  return result;
+}
+
+export async function removeMyAvatarAction() {
+  const userId = await myUserId();
+  if (!userId) return fail(SESSION_EXPIRED);
+
+  const result = await removeAvatar(userId);
+  if (result.ok) refresh();
+  return result;
 }

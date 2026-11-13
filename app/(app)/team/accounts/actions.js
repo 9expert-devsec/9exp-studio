@@ -1,7 +1,8 @@
 "use server";
 
 // Every export of a "use server" module is a public POST endpoint.
-// Export ONLY the four account actions; helpers stay module-private.
+// Export ONLY the six account actions (four account + two avatar); helpers stay
+// module-private.
 //
 // Every action:
 //   1. re-reads the caller's session and 2. re-reads the caller's user doc from the
@@ -19,6 +20,7 @@
 import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
+import { readAvatarFile, removeAvatar, replaceAvatar } from "@/lib/avatar";
 import { generateTemporaryPassword } from "@/lib/password";
 import { SUPERADMIN, getSuperadmin } from "@/lib/team";
 import Role from "@/models/Role";
@@ -162,4 +164,31 @@ export async function unlockAccountAction(formData) {
 
   refresh();
   return { ok: true };
+}
+
+// Profile picture for any account (superadmin). Same validation and
+// upload-then-save-then-delete-old flow as the self-service actions (lib/avatar.js).
+export async function updateAccountAvatarAction(formData) {
+  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+
+  const target = await findTarget(formData);
+  if (!target) return fail("That account no longer exists.");
+
+  const file = await readAvatarFile(formData);
+  if (file.error) return fail(file.error);
+
+  const result = await replaceAvatar(target._id, file.buffer);
+  if (result.ok) refresh();
+  return result;
+}
+
+export async function removeAccountAvatarAction(formData) {
+  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+
+  const target = await findTarget(formData);
+  if (!target) return fail("That account no longer exists.");
+
+  const result = await removeAvatar(target._id);
+  if (result.ok) refresh();
+  return result;
 }

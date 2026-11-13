@@ -16,11 +16,14 @@ import {
   td,
   th,
 } from "@/components/team/styles";
-import { initialsOf } from "@/lib/format";
+import Avatar from "@/components/ui/Avatar";
+import AvatarUploader from "@/components/ui/AvatarUploader";
 import {
   createAccountAction,
   resetPasswordAction,
+  removeAccountAvatarAction,
   unlockAccountAction,
+  updateAccountAvatarAction,
   updateAccountAction,
 } from "./actions";
 
@@ -161,12 +164,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
               <tr key={a.id}>
                 <td className={td}>
                   <div className="flex items-center gap-3">
-                    <span
-                      aria-hidden="true"
-                      className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-brand-500 text-xs font-semibold text-navy"
-                    >
-                      {initialsOf(a.name)}
-                    </span>
+                    <Avatar name={a.name} url={a.avatarUrl} size={36} />
                     <div className="min-w-0">
                       <p className="truncate font-medium text-fg">
                         {a.name}
@@ -246,6 +244,8 @@ export default function AccountsManager({ accounts, roles, meId }) {
         {modal?.type === "edit" && (
           <EditAccountForm
             account={modal.account}
+            // Fresh from props (refresh() after an avatar change re-sends the list).
+            avatarUrl={accounts.find((x) => x.id === modal.account.id)?.avatarUrl ?? null}
             roles={roles}
             isSelf={modal.account.id === meId}
             onDone={close}
@@ -336,7 +336,7 @@ function AddAccountForm({ roles, onDone }) {
   );
 }
 
-function EditAccountForm({ account, roles, isSelf, onDone }) {
+function EditAccountForm({ account, avatarUrl, roles, isSelf, onDone }) {
   const [name, setName] = useState(account.name);
   const [role, setRole] = useState(account.roleKey);
   const [isActive, setIsActive] = useState(account.isActive);
@@ -359,63 +359,79 @@ function EditAccountForm({ account, roles, isSelf, onDone }) {
   };
 
   return (
-    <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
-      <div>
-        <label htmlFor="edit-email" className={label}>Email</label>
-        <input id="edit-email" value={account.email} readOnly className={`${input} cursor-default bg-card-inset`} />
-      </div>
-      <div>
-        <label htmlFor="edit-name" className={label}>Name</label>
-        <input id="edit-name" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} className={input} autoComplete="off" />
-      </div>
-      <div>
-        <label htmlFor="edit-role" className={label}>Role</label>
-        <select
-          id="edit-role"
-          value={role}
-          onChange={(e) => setRole(e.target.value)}
-          disabled={isSelf}
-          aria-describedby={isSelf ? "self-note" : undefined}
-          className={input}
-        >
-          {!account.roleKnown && (
-            <option value={account.roleKey} disabled>{account.roleKey} (unknown role)</option>
-          )}
-          {roles.map((r) => (
-            <option key={r.key} value={r.key}>{r.name}</option>
-          ))}
-        </select>
-      </div>
-      <label className="flex min-h-11 items-center gap-3 text-sm text-fg">
-        <input
-          type="checkbox"
-          checked={isActive}
-          onChange={(e) => setIsActive(e.target.checked)}
-          disabled={isSelf}
-          aria-describedby={isSelf ? "self-note" : "active-note"}
-          className="size-4 accent-brand-500"
-        />
-        Active
-      </label>
-      {isSelf ? (
-        <p id="self-note" className="-mt-2 text-xs text-fg-muted">
-          You cannot change your own role or deactivate your own account.
-        </p>
-      ) : (
-        <p id="active-note" className="-mt-2 text-xs text-fg-muted">
-          Inactive accounts cannot sign in. Role and status changes reach an already
-          signed-in user at their next sign-in.
-        </p>
-      )}
-      <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onDone} className={btnSecondary}>Cancel</button>
-        <button type="submit" disabled={pending || !name.trim()} className={btnPrimary}>
-          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-          Save changes
-        </button>
-      </div>
-    </form>
+    <div className="flex flex-col gap-5">
+      {/* Profile picture (96px); saved on its own, separate from the form below. */}
+      <AvatarUploader
+        name={account.name}
+        url={avatarUrl}
+        onSave={(fd) => {
+          fd.set("id", account.id);
+          return updateAccountAvatarAction(fd);
+        }}
+        onRemove={() => {
+          const fd = new FormData();
+          fd.set("id", account.id);
+          return removeAccountAvatarAction(fd);
+        }}
+      />
+      <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+        <div>
+          <label htmlFor="edit-email" className={label}>Email</label>
+          <input id="edit-email" value={account.email} readOnly className={`${input} cursor-default bg-card-inset`} />
+        </div>
+        <div>
+          <label htmlFor="edit-name" className={label}>Name</label>
+          <input id="edit-name" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} className={input} autoComplete="off" />
+        </div>
+        <div>
+          <label htmlFor="edit-role" className={label}>Role</label>
+          <select
+            id="edit-role"
+            value={role}
+            onChange={(e) => setRole(e.target.value)}
+            disabled={isSelf}
+            aria-describedby={isSelf ? "self-note" : undefined}
+            className={input}
+          >
+            {!account.roleKnown && (
+              <option value={account.roleKey} disabled>{account.roleKey} (unknown role)</option>
+            )}
+            {roles.map((r) => (
+              <option key={r.key} value={r.key}>{r.name}</option>
+            ))}
+          </select>
+        </div>
+        <label className="flex min-h-11 items-center gap-3 text-sm text-fg">
+          <input
+            type="checkbox"
+            checked={isActive}
+            onChange={(e) => setIsActive(e.target.checked)}
+            disabled={isSelf}
+            aria-describedby={isSelf ? "self-note" : "active-note"}
+            className="size-4 accent-brand-500"
+          />
+          Active
+        </label>
+        {isSelf ? (
+          <p id="self-note" className="-mt-2 text-xs text-fg-muted">
+            You cannot change your own role or deactivate your own account.
+          </p>
+        ) : (
+          <p id="active-note" className="-mt-2 text-xs text-fg-muted">
+            Inactive accounts cannot sign in. Role and status changes reach an already
+            signed-in user at their next sign-in.
+          </p>
+        )}
+        <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" onClick={onDone} className={btnSecondary}>Cancel</button>
+          <button type="submit" disabled={pending || !name.trim()} className={btnPrimary}>
+            {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+            Save changes
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 

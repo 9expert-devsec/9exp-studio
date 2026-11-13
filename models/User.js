@@ -19,6 +19,8 @@ const UserSchema = new mongoose.Schema(
     lockedUntil: { type: Date },
     lastLoginAt: { type: Date },
     passwordChangedAt: { type: Date },
+    // Optional profile picture on Cloudinary (9exp-studio/avatars/). See lib/avatar.js.
+    avatar: { url: String, publicId: String, updatedAt: Date },
   },
   { timestamps: true, collection: "users" }
 );

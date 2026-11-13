@@ -4,9 +4,11 @@ import mongoose from "mongoose";
 import { auth } from "@/auth";
 import dbConnect from "@/lib/db";
 import User from "@/models/User";
-import { formatDate, formatDateTime, initialsOf } from "@/lib/format";
+import { formatDate, formatDateTime } from "@/lib/format";
+import AvatarUploader from "@/components/ui/AvatarUploader";
 import Card from "@/components/ui/Card";
 import PageHeader from "@/components/ui/PageHeader";
+import { removeMyAvatarAction, updateMyAvatarAction } from "./actions";
 import ChangePasswordForm from "./ChangePasswordForm";
 
 export const metadata = {
@@ -47,7 +49,7 @@ async function Profile() {
 
   await dbConnect();
   const user = await User.findById(userId)
-    .select("name email role lastLoginAt createdAt")
+    .select("name email role lastLoginAt createdAt avatar.url")
     .lean();
   if (!user) {
     return (
@@ -59,10 +61,14 @@ async function Profile() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-4">
-        <span className="flex size-16 shrink-0 items-center justify-center rounded-[18px] bg-brand-500 text-xl font-semibold text-navy">
-          {initialsOf(user.name)}
-        </span>
+      <div className="flex flex-col gap-4">
+        {/* 96px avatar with the uploader controls under it. */}
+        <AvatarUploader
+          name={user.name}
+          url={user.avatar?.url ?? null}
+          onSave={updateMyAvatarAction}
+          onRemove={removeMyAvatarAction}
+        />
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold text-fg">
             {user.name}
