@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { usePathname } from "next/navigation";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Bell, Menu, Search, Settings, X } from "lucide-react";
 import StudioLogo from "@/components/brand/StudioLogo";
 import IconButton from "@/components/ui/IconButton";
-import NavItem from "./NavItem";
+import { ActiveNavItems, NavItems, RouteChangeEffect } from "./PathnameBits";
 import ThemeToggle from "./ThemeToggle";
 import { ACCOUNT_ITEM, NAV_ITEMS } from "./nav";
 
@@ -19,15 +18,15 @@ import { ACCOUNT_ITEM, NAV_ITEMS } from "./nav";
 // Session-dependent parts arrive as server-rendered slots wrapped in <Suspense>
 // by app/(app)/layout.js: `teamSlot` (Team Management, superadmin only) and
 // `userMenuSlot` (account pill + dropdown).
+//
+// The pathname is read only inside <Suspense> (components/shell/PathnameBits.jsx):
+// on dynamic routes like /projects/[id] it is request-time data under cacheComponents.
 
-const isActive = (pathname, href) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
+const ACCOUNT_ITEMS = [ACCOUNT_ITEM];
 
 export default function AppShell({ children, teamSlot, userMenuSlot }) {
-  const pathname = usePathname();
-  // The drawer is "open for a given path": navigating anywhere closes it without an effect.
-  const [openPath, setOpenPath] = useState(null);
-  const open = openPath === pathname;
-  const close = () => setOpenPath(null);
+  const [open, setOpen] = useState(false);
+  const close = useCallback(() => setOpen(false), []);
 
   const hamburgerRef = useRef(null);
   const closeRef = useRef(null);
@@ -41,7 +40,7 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
       const prevOverflow = document.body.style.overflow;
       document.body.style.overflow = "hidden";
       const onKey = (e) => {
-        if (e.key === "Escape") setOpenPath(null);
+        if (e.key === "Escape") setOpen(false);
       };
       document.addEventListener("keydown", onKey);
       return () => {
@@ -57,6 +56,11 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
 
   return (
     <div className="flex min-h-dvh flex-1 bg-page text-fg dark:[color-scheme:dark]">
+      {/* Close the drawer on any route change (link, back/forward). */}
+      <Suspense fallback={null}>
+        <RouteChangeEffect onRouteChange={close} />
+      </Suspense>
+
       {/* Backdrop (mobile drawer only) */}
       <div
         aria-hidden="true"
@@ -89,23 +93,16 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
 
         <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           <ul className="flex flex-col gap-1">
-            {NAV_ITEMS.map((item) => (
-              <NavItem
-                key={item.label}
-                item={item}
-                active={item.href ? isActive(pathname, item.href) : false}
-                onNavigate={close}
-              />
-            ))}
+            <Suspense fallback={<NavItems items={NAV_ITEMS} onNavigate={close} />}>
+              <ActiveNavItems items={NAV_ITEMS} onNavigate={close} />
+            </Suspense>
             {teamSlot}
           </ul>
           <hr className="mt-3 border-0 border-t border-nav-divider" />
           <ul className="mt-3 flex flex-col gap-1">
-            <NavItem
-              item={ACCOUNT_ITEM}
-              active={isActive(pathname, ACCOUNT_ITEM.href)}
-              onNavigate={close}
-            />
+            <Suspense fallback={<NavItems items={ACCOUNT_ITEMS} onNavigate={close} />}>
+              <ActiveNavItems items={ACCOUNT_ITEMS} onNavigate={close} />
+            </Suspense>
           </ul>
         </nav>
       </aside>
@@ -116,7 +113,7 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
             <button
               ref={hamburgerRef}
               type="button"
-              onClick={() => setOpenPath(pathname)}
+              onClick={() => setOpen(true)}
               aria-label="Open menu"
               aria-controls="app-sidebar"
               aria-expanded={open}

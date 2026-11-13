@@ -22,7 +22,7 @@ import { ChevronLeft } from "lucide-react";
  * />
  *
  * @param {{
- *   title: React.ReactNode,
+ *   title?: React.ReactNode,  // omit when the page renders its own <h1> (detail header card)
  *   breadcrumb?: { label: string, href?: string }[],
  *   actions?: React.ReactNode,
  *   children?: React.ReactNode,
@@ -38,10 +38,24 @@ export default function PageHeader({ title, breadcrumb, actions, children }) {
         .find((c) => c.href)?.href
     : undefined;
 
+  const backLink = parentHref && (
+    <Link
+      href={parentHref}
+      aria-label="Back"
+      className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-full text-fg hover:bg-control focus-visible:outline-2 focus-visible:outline-brand-500"
+    >
+      <ChevronLeft className="size-[17px]" aria-hidden="true" />
+    </Link>
+  );
+  // No title (e.g. a detail page whose own header card holds the <h1>): render just
+  // the breadcrumb line, with the back chevron inline before it.
+  const hasTitleRow = !!title || !!actions;
+
   return (
     <div className="flex flex-col gap-2.5">
       {trail && (
-        <nav aria-label="Breadcrumb">
+        <nav aria-label="Breadcrumb" className={hasTitleRow ? "" : "flex items-center gap-2"}>
+          {!hasTitleRow && backLink}
           <ol className="flex flex-wrap items-center gap-1 text-xs text-fg-muted">
             {trail.map((crumb, i) => {
               const last = i === trail.length - 1;
@@ -67,19 +81,15 @@ export default function PageHeader({ title, breadcrumb, actions, children }) {
         </nav>
       )}
 
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
-        {parentHref && (
-          <Link
-            href={parentHref}
-            aria-label="Back"
-            className="-ml-1 flex size-8 shrink-0 items-center justify-center rounded-full text-fg hover:bg-control focus-visible:outline-2 focus-visible:outline-brand-500"
-          >
-            <ChevronLeft className="size-[17px]" aria-hidden="true" />
-          </Link>
-        )}
-        <h1 className="min-w-0 flex-1 text-[27px] font-bold leading-tight text-fg sm:text-[28px]">{title}</h1>
-        {actions && <div className="flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
-      </div>
+      {hasTitleRow && (
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-3">
+          {backLink}
+          {title && (
+            <h1 className="min-w-0 flex-1 text-[27px] font-bold leading-tight text-fg sm:text-[28px]">{title}</h1>
+          )}
+          {actions && <div className="ml-auto flex shrink-0 flex-wrap items-center gap-2">{actions}</div>}
+        </div>
+      )}
 
       {children}
     </div>
