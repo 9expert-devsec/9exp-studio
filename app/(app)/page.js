@@ -14,7 +14,6 @@ export default function DashboardPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <PageHeader
-        section="Dashboard"
         title={
           <Suspense
             fallback={

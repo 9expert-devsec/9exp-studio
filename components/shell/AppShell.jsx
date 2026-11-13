@@ -124,7 +124,6 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
             >
               <Menu className="size-5" aria-hidden="true" />
             </button>
-            <p className="truncate text-sm font-semibold text-fg">9Expert Studio</p>
 
             <div className="ml-auto flex items-center gap-1.5">
               <IconButton icon={Search} label="Search" title="Search is coming soon" disabled />

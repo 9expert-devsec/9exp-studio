@@ -18,7 +18,7 @@ export const metadata = {
 export default function AccountPage() {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
-      <PageHeader section="Account" title="Account" />
+      <PageHeader title="Account" />
 
       <div className="grid gap-6 lg:grid-cols-2 lg:items-start">
         <Card as="section" aria-labelledby="profile-heading">

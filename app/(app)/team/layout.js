@@ -25,7 +25,7 @@ async function SuperadminGate({ children }) {
   if (!(await getSuperadmin())) notFound();
   return (
     <>
-      <PageHeader section="Team Management" title="Team Management">
+      <PageHeader title="Team Management">
         <div className="mt-2">
           <TeamTabs />
         </div>
@@ -38,7 +38,6 @@ async function SuperadminGate({ children }) {
 function TeamSkeleton() {
   return (
     <div className="flex animate-pulse flex-col gap-6" aria-hidden="true">
-      <span className="h-3 w-48 rounded bg-track" />
       <span className="h-8 w-64 max-w-full rounded-[10px] bg-track" />
       <span className="h-11 w-48 rounded-full bg-track" />
       <span className="h-64 rounded-[24px] bg-track" />
