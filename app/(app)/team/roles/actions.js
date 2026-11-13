@@ -3,19 +3,18 @@
 // Every export of a "use server" module is a public POST endpoint.
 // Export ONLY the three role actions; helpers stay module-private.
 //
-// Each action re-reads the caller from the DB (getSuperadmin), validates every
+// Each action re-reads the caller from the DB (authorizeSuperadmin), validates every
 // field itself, and never takes `key` (on update), `isSystem` or `permissions`
 // from the client.
 
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
-import { getSuperadmin } from "@/lib/team";
+import { authorizeSuperadmin } from "@/lib/team";
 import Role, { ROLE_DESCRIPTION_MAX, ROLE_KEY_PATTERN, ROLE_NAME_MAX } from "@/models/Role";
 import User from "@/models/User";
 
 const fail = (error) => ({ ok: false, error });
 const str = (v) => (typeof v === "string" ? v : "");
-const NOT_ALLOWED = "You are not allowed to manage roles. Please sign in again.";
 
 function readNameAndDescription(formData) {
   const name = str(formData.get("name")).trim();
@@ -35,7 +34,8 @@ async function findRole(formData) {
 }
 
 export async function createRoleAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const fields = readNameAndDescription(formData);
   if (fields.error) return fail(fields.error);
@@ -60,7 +60,8 @@ export async function createRoleAction(formData) {
 }
 
 export async function updateRoleAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const role = await findRole(formData);
   if (!role) return fail("That role no longer exists.");
@@ -80,7 +81,8 @@ export async function updateRoleAction(formData) {
 }
 
 export async function deleteRoleAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const role = await findRole(formData);
   if (!role) return fail("That role no longer exists.");

@@ -19,6 +19,9 @@ const UserSchema = new mongoose.Schema(
     lockedUntil: { type: Date },
     lastLoginAt: { type: Date },
     passwordChangedAt: { type: Date },
+    // Set on admin-provisioned passwords (create, reset, create-user script); cleared
+    // when the person sets their own. Missing on older docs = false (no backfill).
+    mustChangePassword: { type: Boolean, default: false },
     // Optional profile picture on Cloudinary (9exp-studio/avatars/). See lib/avatar.js.
     avatar: { url: String, publicId: String, updatedAt: Date },
   },

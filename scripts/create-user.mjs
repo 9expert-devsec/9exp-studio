@@ -84,7 +84,8 @@ async function main() {
 
     const password = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(password, 12);
-    await User.create({ email, name, role, passwordHash });
+    // The person must replace this password at their first sign-in (/first-login).
+    await User.create({ email, name, role, passwordHash, mustChangePassword: true });
 
     console.log(`Created ${role} user: ${name} <${email}>`);
     console.log("");

@@ -6,13 +6,16 @@
 //
 // Every action:
 //   1. re-reads the caller's session and 2. re-reads the caller's user doc from the
-//      DB, requiring an active superadmin (a stale JWT role is never trusted);
+//      DB (authorizeSuperadmin): an active superadmin who does not still have to
+//      change their own password. A stale JWT role/flag is never trusted;
 //   3. validates every input;
 //   4. takes the target's role only from the validated `role` field, checked
 //      against the `roles` collection. Nothing else about roles/permissions is read.
 //
-// Temporary passwords are returned to the caller ONCE in the action result. They
-// are never stored in plain text and never logged.
+// Passwords: generated ones are returned to the caller ONCE in the action result;
+// chosen ones are never echoed back. Neither is stored in plain text or logged.
+// Admin-provisioned passwords set mustChangePassword: the person must replace them
+// at their first sign-in (/first-login).
 //
 // See lib/team.js for the JWT session limitations (role/active changes reach the
 // affected user's session at their next sign-in).
@@ -21,20 +24,19 @@ import bcrypt from "bcryptjs";
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
 import { readAvatarFile, removeAvatar, replaceAvatar } from "@/lib/avatar";
-import { generateTemporaryPassword } from "@/lib/password";
-import { SUPERADMIN, getSuperadmin } from "@/lib/team";
+import { BCRYPT_COST, generateTemporaryPassword, validateNewPassword } from "@/lib/password";
+import { SUPERADMIN, authorizeSuperadmin } from "@/lib/team";
 import Role from "@/models/Role";
 import User from "@/models/User";
 
-const BCRYPT_COST = 12;
 const NAME_MAX = 100;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const fail = (error) => ({ ok: false, error });
 const str = (v) => (typeof v === "string" ? v : "");
-const NOT_ALLOWED = "You are not allowed to manage accounts. Please sign in again.";
 const LAST_SUPERADMIN =
   "This would leave no active Super Admin. Make another account an active Super Admin first.";
+const PHOTO_WARNING = "Account created, but the photo could not be uploaded.";
 
 function readName(formData) {
   const name = str(formData.get("name")).trim();
@@ -69,14 +71,29 @@ async function removesLastSuperadmin(target, next) {
   return others === 0;
 }
 
-const hashTemporaryPassword = async () => {
+// passwordMode: "generate" (default) | "set" (password + passwordConfirm, same rules
+// as /first-login). Returns the hash, plus the plain password ONLY when generated.
+async function readPasswordChoice(formData) {
+  const mode = str(formData.get("passwordMode")) === "set" ? "set" : "generate";
+  if (mode === "set") {
+    const password = str(formData.get("password"));
+    const error = validateNewPassword(password, str(formData.get("passwordConfirm")));
+    if (error) return { error };
+    return { mode, passwordHash: await bcrypt.hash(password, BCRYPT_COST) };
+  }
   const password = generateTemporaryPassword();
-  const passwordHash = await bcrypt.hash(password, BCRYPT_COST);
-  return { password, passwordHash };
-};
+  return { mode, password, passwordHash: await bcrypt.hash(password, BCRYPT_COST) };
+}
+
+// Optional `avatar` file on create. Missing/empty = no photo.
+function hasAvatar(formData) {
+  const file = formData.get("avatar");
+  return !!file && typeof file !== "string" && file.size > 0;
+}
 
 export async function createAccountAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const email = str(formData.get("email")).trim().toLowerCase();
   if (!EMAIL_RE.test(email)) return fail("Enter a valid email address.");
@@ -87,23 +104,56 @@ export async function createAccountAction(formData) {
   const role = await readRole(formData);
   if (role.error) return fail(role.error);
 
+  // Validate the photo up front, but upload it only after the account exists.
+  let avatar = null;
+  let warning;
+  if (hasAvatar(formData)) {
+    avatar = await readAvatarFile(formData);
+    if (avatar.error) {
+      warning = PHOTO_WARNING;
+      avatar = null;
+    }
+  }
+
+  const choice = await readPasswordChoice(formData);
+  if (choice.error) return fail(choice.error);
+
   if (await User.exists({ email })) return fail("An account with this email already exists.");
 
-  const { password, passwordHash } = await hashTemporaryPassword();
+  let user;
   try {
-    await User.create({ email, name: name.name, role: role.role, passwordHash });
+    user = await User.create({
+      email,
+      name: name.name,
+      role: role.role,
+      passwordHash: choice.passwordHash,
+      mustChangePassword: true,
+    });
   } catch (err) {
     if (err?.code === 11000) return fail("An account with this email already exists.");
     throw err;
   }
 
+  // Same helper as round 13: upload, save, and delete the new upload if the save
+  // fails (guarded delete). A photo failure keeps the account.
+  if (avatar) {
+    const result = await replaceAvatar(user._id, avatar.buffer);
+    if (!result.ok) warning = PHOTO_WARNING;
+  }
+
   refresh();
-  return { ok: true, password };
+  return {
+    ok: true,
+    mode: choice.mode,
+    ...(choice.mode === "generate" ? { password: choice.password } : {}),
+    ...(warning ? { warning } : {}),
+  };
 }
 
 export async function updateAccountAction(formData) {
-  const me = await getSuperadmin();
-  if (!me) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
+  const { me } = caller;
 
   const target = await findTarget(formData);
   if (!target) return fail("That account no longer exists.");
@@ -132,27 +182,46 @@ export async function updateAccountAction(formData) {
   return { ok: true };
 }
 
+// KNOWN LIMITATION: sessions are JWTs, so a session the target already has keeps
+// working until it expires (7 days). Their NEXT sign-in needs the new password and
+// then the forced change at /first-login.
 export async function resetPasswordAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const target = await findTarget(formData);
   if (!target) return fail("That account no longer exists.");
+  if (target._id.equals(caller.me._id)) {
+    return fail("You cannot reset your own password here. Change it on the Account page.");
+  }
 
-  const { password, passwordHash } = await hashTemporaryPassword();
+  const choice = await readPasswordChoice(formData);
+  if (choice.error) return fail(choice.error);
+
   await User.updateOne(
     { _id: target._id },
     {
-      $set: { passwordHash, passwordChangedAt: new Date(), failedLoginCount: 0 },
+      $set: {
+        passwordHash: choice.passwordHash,
+        passwordChangedAt: new Date(),
+        mustChangePassword: true,
+        failedLoginCount: 0,
+      },
       $unset: { lockedUntil: 1 },
     }
   );
 
   refresh();
-  return { ok: true, password };
+  return {
+    ok: true,
+    mode: choice.mode,
+    ...(choice.mode === "generate" ? { password: choice.password } : {}),
+  };
 }
 
 export async function unlockAccountAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const target = await findTarget(formData);
   if (!target) return fail("That account no longer exists.");
@@ -169,7 +238,8 @@ export async function unlockAccountAction(formData) {
 // Profile picture for any account (superadmin). Same validation and
 // upload-then-save-then-delete-old flow as the self-service actions (lib/avatar.js).
 export async function updateAccountAvatarAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const target = await findTarget(formData);
   if (!target) return fail("That account no longer exists.");
@@ -183,7 +253,8 @@ export async function updateAccountAvatarAction(formData) {
 }
 
 export async function removeAccountAvatarAction(formData) {
-  if (!(await getSuperadmin())) return fail(NOT_ALLOWED);
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
 
   const target = await findTarget(formData);
   if (!target) return fail("That account no longer exists.");

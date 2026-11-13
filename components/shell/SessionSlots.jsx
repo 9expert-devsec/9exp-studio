@@ -2,8 +2,9 @@
 // by app/(app)/layout.js (required under cacheComponents).
 
 import mongoose from "mongoose";
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
 import dbConnect from "@/lib/db";
+import { signOutAction } from "@/lib/session-actions";
 import Role from "@/models/Role";
 import User from "@/models/User";
 import TeamNavLink from "./TeamNavLink";
@@ -40,11 +41,6 @@ export async function UserMenuSlot() {
   const session = await auth();
   const user = session?.user;
   if (!user) return null;
-
-  async function signOutAction() {
-    "use server";
-    await signOut({ redirectTo: "/login" });
-  }
 
   const { roleName, avatarUrl } = await pillDataFor(user.id, user.role);
 

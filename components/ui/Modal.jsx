@@ -7,6 +7,13 @@ import { X } from "lucide-react";
 // inert background, Escape-to-close and focus return for free.
 // Children mount only while open, so form state resets each time it opens.
 // Clicking the backdrop does NOT close it (protects typed input and one-time passwords).
+//
+// Initial focus (showModal() alone would focus the ✕ close button): an element marked
+// `data-autofocus` (e.g. the safe action of a confirm dialog), else the first real
+// field. React's autoFocus does not work here: it runs before the dialog opens.
+const FIRST_FIELD =
+  "input:not([type=hidden]):not([type=file]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])";
+
 export default function Modal({ open, onClose, title, description, children }) {
   const ref = useRef(null);
   const titleId = useId();
@@ -15,7 +22,11 @@ export default function Modal({ open, onClose, title, description, children }) {
   useEffect(() => {
     const dialog = ref.current;
     if (!dialog) return;
-    if (open && !dialog.open) dialog.showModal();
+    if (open && !dialog.open) {
+      dialog.showModal();
+      const target = dialog.querySelector("[data-autofocus]") ?? dialog.querySelector(FIRST_FIELD);
+      target?.focus();
+    }
     if (!open && dialog.open) dialog.close();
   }, [open]);
 

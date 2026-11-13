@@ -332,7 +332,7 @@ function DeleteRoleConfirm({ role, onDone }) {
     <div className="flex flex-col gap-4">
       <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onDone} className={btnSecondary} autoFocus>
+        <button type="button" onClick={onDone} className={btnSecondary} data-autofocus>
           Cancel
         </button>
         <button type="button" onClick={onConfirm} disabled={pending} className={btnDanger}>

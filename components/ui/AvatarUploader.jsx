@@ -17,6 +17,11 @@ import Button from "./Button";
 //   onSave(fd)      server action taking FormData with `avatar` → { ok, avatarUrl } | { ok:false, error }
 //   onRemove()      server action → { ok } | { ok:false, error }
 //   size            preview size (default 96)
+//
+// Deferred mode (`deferred` + `onPrepared`), for forms that create the record first
+// (Team → Add account): same crop/resize/preview, but no Save/Remove calls. The
+// prepared Blob (or null when cleared) is handed to `onPrepared`, and the parent
+// sends it with its own form.
 
 const ACCEPT = ["image/jpeg", "image/png", "image/webp"];
 const MAX_ORIGINAL = 10 * 1024 * 1024; // 10 MB
@@ -69,7 +74,15 @@ async function prepare(file) {
   return blob;
 }
 
-export default function AvatarUploader({ name, url, onSave, onRemove, size = 96 }) {
+export default function AvatarUploader({
+  name,
+  url,
+  onSave,
+  onRemove,
+  size = 96,
+  deferred = false,
+  onPrepared,
+}) {
   const inputId = useId();
   const statusId = useId();
   const inputRef = useRef(null);
@@ -100,7 +113,14 @@ export default function AvatarUploader({ name, url, onSave, onRemove, size = 96 
   const onPick = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    reset();
+    if (deferred) {
+      // Keep the input's new FileList; just drop the previous preview and blob.
+      setBlob(null);
+      setPreview(null);
+      onPrepared?.(null);
+    } else {
+      reset();
+    }
 
     if (!ACCEPT.includes(file.type)) {
       setStatus({ kind: "error", text: "Choose a JPEG, PNG or WebP picture." });
@@ -121,7 +141,12 @@ export default function AvatarUploader({ name, url, onSave, onRemove, size = 96 
       }
       setBlob(prepared);
       setPreview(URL.createObjectURL(prepared));
-      setStatus({ kind: "idle", text: "Preview ready. Save to use this picture." });
+      if (deferred) {
+        onPrepared?.(prepared);
+        setStatus({ kind: "idle", text: "Photo ready. It is uploaded when you save the form." });
+      } else {
+        setStatus({ kind: "idle", text: "Preview ready. Save to use this picture." });
+      }
     } catch {
       setStatus({ kind: "error", text: "That picture could not be read. Try another one." });
     } finally {
@@ -166,6 +191,12 @@ export default function AvatarUploader({ name, url, onSave, onRemove, size = 96 
     setStatus({ kind: "idle", text: "" });
   };
 
+  const clearDeferred = () => {
+    reset();
+    onPrepared?.(null);
+    setStatus({ kind: "idle", text: "" });
+  };
+
   return (
     <div className="flex flex-col items-start gap-3">
       {preview ? (
@@ -195,7 +226,25 @@ export default function AvatarUploader({ name, url, onSave, onRemove, size = 96 
       />
 
       <div className="flex flex-wrap gap-2">
-        {preview ? (
+        {deferred ? (
+          <>
+            <Button
+              variant="secondary"
+              icon={preparing ? undefined : Camera}
+              onClick={() => inputRef.current?.click()}
+              disabled={busy}
+              aria-controls={inputId}
+            >
+              {preparing && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              {preview ? "Change photo" : "Add photo"}
+            </Button>
+            {preview && (
+              <Button variant="secondary" icon={Trash2} onClick={clearDeferred} disabled={busy}>
+                Remove photo
+              </Button>
+            )}
+          </>
+        ) : preview ? (
           <>
             <Button onClick={save} disabled={busy}>
               {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}

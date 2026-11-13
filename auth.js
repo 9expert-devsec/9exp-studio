@@ -71,6 +71,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: user.name,
           email: user.email,
           role: user.role,
+          // The ONLY source of this flag in the session (see auth.config.js jwt()).
+          mustChangePassword: !!user.mustChangePassword,
         };
       },
     }),

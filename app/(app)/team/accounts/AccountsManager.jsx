@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { AlertTriangle, KeyRound, Loader2, LockOpen, Pencil, Plus, Search, UserPlus } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import PasswordChoice, { passwordChoiceError } from "@/components/team/PasswordChoice";
 import TempPasswordNotice from "@/components/team/TempPasswordNotice";
 import {
   btnPrimary,
@@ -219,15 +220,17 @@ export default function AccountsManager({ accounts, roles, meId }) {
                       <Pencil className="size-3.5" aria-hidden="true" />
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setModal({ type: "reset", account: a })}
-                      className={btnRow}
-                      aria-label={`Reset password for ${a.name}`}
-                    >
-                      <KeyRound className="size-3.5" aria-hidden="true" />
-                      Reset password
-                    </button>
+                    {a.id !== meId && (
+                      <button
+                        type="button"
+                        onClick={() => setModal({ type: "reset", account: a })}
+                        className={btnRow}
+                        aria-label={`Reset password for ${a.name}`}
+                      >
+                        <KeyRound className="size-3.5" aria-hidden="true" />
+                        Reset password
+                      </button>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -259,7 +262,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
         title="Reset password?"
         description={
           modal?.type === "reset"
-            ? `${modal.account.name} (${modal.account.email}) gets a new temporary password. Their current password stops working, and the account is unlocked.`
+            ? `${modal.account.name} (${modal.account.email}) gets a new password. Their current password stops working, the account is unlocked, and they must change it at their next sign-in.`
             : undefined
         }
       >
@@ -269,41 +272,108 @@ export default function AccountsManager({ accounts, roles, meId }) {
   );
 }
 
-function AddAccountForm({ roles, onDone }) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState("");
-  const [error, setError] = useState("");
-  const [password, setPassword] = useState(null);
-  const [pending, startTransition] = useTransition();
-
-  if (password) {
+// Result screen after create/reset. Generated passwords are shown ONCE; a chosen
+// password is never echoed back. Takes focus because it replaces the form.
+function ProvisionResult({ intro, result, onDone }) {
+  if (result.password) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-fg">
-          Account created for <strong>{name.trim()}</strong> ({email.trim().toLowerCase()}).
-        </p>
-        <TempPasswordNotice password={password} onDone={onDone} />
+        {intro}
+        {result.warning && <p role="alert" className="text-sm text-warning">{result.warning}</p>}
+        <TempPasswordNotice password={result.password} onDone={onDone} />
       </div>
     );
   }
+  return (
+    <div className="flex flex-col gap-4">
+      {intro}
+      {result.warning && <p role="alert" className="text-sm text-warning">{result.warning}</p>}
+      <p className="text-sm text-fg-muted">
+        Share the password you set securely. The person must change it the first time they sign in.
+      </p>
+      <DoneButton onDone={onDone} />
+    </div>
+  );
+}
+
+function DoneButton({ onDone }) {
+  const ref = useRef(null);
+  useEffect(() => ref.current?.focus(), []);
+  return (
+    <button ref={ref} type="button" onClick={onDone} className={`${btnPrimary} sm:self-end`}>
+      Done
+    </button>
+  );
+}
+
+function AddAccountForm({ roles, onDone }) {
+  const [photo, setPhoto] = useState(null); // prepared Blob from AvatarUploader (deferred)
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [role, setRole] = useState("");
+  const [passwordMode, setPasswordMode] = useState("generate");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
+  const [error, setError] = useState("");
+  const [result, setResult] = useState(null);
+  const [pending, startTransition] = useTransition();
+
+  if (result) {
+    return (
+      <ProvisionResult
+        result={result}
+        onDone={onDone}
+        intro={
+          <p className="text-sm text-fg">
+            Account created for <strong>{name.trim()}</strong> ({email.trim().toLowerCase()}).
+          </p>
+        }
+      />
+    );
+  }
+
+  const choiceError = passwordChoiceError(passwordMode, password, passwordConfirm);
 
   const onSubmit = (e) => {
     e.preventDefault();
     setError("");
+    if (choiceError) {
+      setError(choiceError);
+      return;
+    }
     const fd = new FormData();
     fd.set("name", name);
     fd.set("email", email);
     fd.set("role", role);
+    fd.set("passwordMode", passwordMode);
+    if (passwordMode === "set") {
+      fd.set("password", password);
+      fd.set("passwordConfirm", passwordConfirm);
+    }
+    if (photo) {
+      const ext = photo.type === "image/webp" ? "webp" : "jpg";
+      fd.set("avatar", new File([photo], `avatar.${ext}`, { type: photo.type }));
+    }
     startTransition(async () => {
-      const result = await createAccountAction(fd);
-      if (result?.ok) setPassword(result.password);
-      else setError(result?.error ?? "Something went wrong.");
+      const res = await createAccountAction(fd);
+      if (res?.ok) {
+        setPassword("");
+        setPasswordConfirm("");
+        setResult(res);
+      } else {
+        setError(res?.error ?? "Something went wrong.");
+      }
     });
   };
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
+      <div>
+        <p className={label}>
+          Profile photo <span className="font-normal text-fg-muted">(optional)</span>
+        </p>
+        <AvatarUploader name={name} size={96} deferred onPrepared={setPhoto} />
+      </div>
       <div>
         <label htmlFor="acc-name" className={label}>Name</label>
         <input id="acc-name" required maxLength={100} value={name} onChange={(e) => setName(e.target.value)} className={input} autoComplete="off" />
@@ -321,13 +391,23 @@ function AddAccountForm({ roles, onDone }) {
           ))}
         </select>
       </div>
-      <p className="text-xs text-fg-muted">
-        A temporary password is generated and shown once after the account is created.
-      </p>
+      <PasswordChoice
+        idPrefix="acc"
+        mode={passwordMode}
+        onModeChange={setPasswordMode}
+        password={password}
+        onPassword={setPassword}
+        confirm={passwordConfirm}
+        onConfirm={setPasswordConfirm}
+      />
       <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={onDone} className={btnSecondary}>Cancel</button>
-        <button type="submit" disabled={pending || !name.trim() || !email.trim() || !role} className={btnPrimary}>
+        <button
+          type="submit"
+          disabled={pending || !name.trim() || !email.trim() || !role || !!choiceError}
+          className={btnPrimary}
+        >
           {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <UserPlus className="size-4" aria-hidden="true" />}
           Create account
         </button>
@@ -436,33 +516,70 @@ function EditAccountForm({ account, avatarUrl, roles, isSelf, onDone }) {
 }
 
 function ResetPasswordFlow({ account, onDone }) {
+  const [passwordMode, setPasswordMode] = useState("generate");
+  const [password, setPassword] = useState("");
+  const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState("");
-  const [password, setPassword] = useState(null);
+  const [result, setResult] = useState(null);
   const [pending, startTransition] = useTransition();
 
-  if (password) return <TempPasswordNotice password={password} onDone={onDone} />;
+  if (result) {
+    return (
+      <ProvisionResult
+        result={result}
+        onDone={onDone}
+        intro={<p className="text-sm text-fg">Password reset for <strong>{account.name}</strong>.</p>}
+      />
+    );
+  }
 
-  const onConfirm = () => {
+  const choiceError = passwordChoiceError(passwordMode, password, passwordConfirm);
+
+  const onConfirm = (e) => {
+    e.preventDefault();
     setError("");
+    if (choiceError) {
+      setError(choiceError);
+      return;
+    }
     const fd = new FormData();
     fd.set("id", account.id);
+    fd.set("passwordMode", passwordMode);
+    if (passwordMode === "set") {
+      fd.set("password", password);
+      fd.set("passwordConfirm", passwordConfirm);
+    }
     startTransition(async () => {
-      const result = await resetPasswordAction(fd);
-      if (result?.ok) setPassword(result.password);
-      else setError(result?.error ?? "Something went wrong.");
+      const res = await resetPasswordAction(fd);
+      if (res?.ok) {
+        setPassword("");
+        setPasswordConfirm("");
+        setResult(res);
+      } else {
+        setError(res?.error ?? "Something went wrong.");
+      }
     });
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <form onSubmit={onConfirm} noValidate className="flex flex-col gap-4">
+      <PasswordChoice
+        idPrefix="reset"
+        mode={passwordMode}
+        onModeChange={setPasswordMode}
+        password={password}
+        onPassword={setPassword}
+        confirm={passwordConfirm}
+        onConfirm={setPasswordConfirm}
+      />
       <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onDone} className={btnSecondary} autoFocus>Cancel</button>
-        <button type="button" onClick={onConfirm} disabled={pending} className={btnPrimary}>
+        <button type="button" onClick={onDone} className={btnSecondary}>Cancel</button>
+        <button type="submit" disabled={pending || !!choiceError} className={btnPrimary}>
           {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <KeyRound className="size-4" aria-hidden="true" />}
           Reset password
         </button>
       </div>
-    </div>
+    </form>
   );
 }
