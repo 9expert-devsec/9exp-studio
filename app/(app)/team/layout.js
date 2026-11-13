@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import TeamTabs from "@/components/team/TeamTabs";
+import PageHeader from "@/components/ui/PageHeader";
 import { getSuperadmin } from "@/lib/team";
 
 export const metadata = {
@@ -24,10 +25,11 @@ async function SuperadminGate({ children }) {
   if (!(await getSuperadmin())) notFound();
   return (
     <>
-      <div className="flex flex-col gap-4">
-        <h1 className="text-2xl text-slate-900 dark:text-white sm:text-3xl">Team Management</h1>
-        <TeamTabs />
-      </div>
+      <PageHeader section="Team Management" title="Team Management">
+        <div className="mt-2">
+          <TeamTabs />
+        </div>
+      </PageHeader>
       {children}
     </>
   );
@@ -36,9 +38,10 @@ async function SuperadminGate({ children }) {
 function TeamSkeleton() {
   return (
     <div className="flex animate-pulse flex-col gap-6" aria-hidden="true">
-      <span className="h-8 w-64 max-w-full rounded-lg bg-slate-200 dark:bg-white/10" />
-      <span className="h-11 w-48 rounded-lg bg-slate-200 dark:bg-white/10" />
-      <span className="h-64 rounded-2xl bg-slate-200 dark:bg-white/10" />
+      <span className="h-3 w-48 rounded bg-track" />
+      <span className="h-8 w-64 max-w-full rounded-[10px] bg-track" />
+      <span className="h-11 w-48 rounded-full bg-track" />
+      <span className="h-64 rounded-[24px] bg-track" />
     </div>
   );
 }

@@ -6,7 +6,10 @@ import { usePathname } from "next/navigation";
 import { ChevronDown, LogOut, Settings } from "lucide-react";
 import { initialsOf } from "@/lib/format";
 
-// Avatar + dropdown. `user` and `signOutAction` come from the server (UserMenuSlot).
+// Account pill + dropdown. `user` and `signOutAction` come from the server (UserMenuSlot).
+// Figma pill: 34px tall, radius 18, `control` surface, 24px avatar (radius 10,
+// navy initials on brand-500), name + role stacked, 13px chevron.
+// DEVIATION: Figma's 10px/8px text is raised to 13px/11px for legibility.
 export default function UserMenu({ user, signOutAction }) {
   const pathname = usePathname();
   // Open "for a path": navigating closes it automatically.
@@ -36,7 +39,7 @@ export default function UserMenu({ user, signOutAction }) {
   }, [open]);
 
   const itemClass =
-    "flex min-h-11 w-full items-center gap-2 rounded-lg px-3 text-sm text-slate-700 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-200 dark:hover:bg-white/5";
+    "flex min-h-11 w-full items-center gap-2 rounded-xl px-3 text-sm text-fg hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-brand-500";
 
   return (
     <div ref={rootRef} className="relative">
@@ -47,13 +50,20 @@ export default function UserMenu({ user, signOutAction }) {
         aria-expanded={open}
         aria-controls={menuId}
         aria-label={`Account menu for ${user.name}`}
-        className="flex min-h-11 items-center gap-1.5 rounded-full p-1 pr-2 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-500 dark:hover:bg-white/5"
+        className="relative flex h-[34px] items-center gap-2 rounded-[18px] border border-control-line bg-control p-1 pr-2 text-left transition-colors after:absolute after:-inset-y-[5px] after:inset-x-0 after:content-[''] hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500"
       >
-        <span className="flex size-9 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white">
+        <span
+          aria-hidden="true"
+          className="flex size-6 shrink-0 items-center justify-center rounded-[10px] bg-brand-500 text-[10px] font-semibold text-navy"
+        >
           {initialsOf(user.name)}
         </span>
+        <span className="hidden min-w-0 max-w-36 flex-col sm:flex">
+          <span className="truncate text-[13px] font-semibold leading-[15px] text-fg">{user.name}</span>
+          <span className="truncate text-[11px] leading-[13px] text-fg-muted">{user.roleName}</span>
+        </span>
         <ChevronDown
-          className={`size-4 text-slate-500 transition-transform dark:text-slate-400 ${open ? "rotate-180" : ""}`}
+          className={`size-[13px] shrink-0 text-fg-muted transition-transform ${open ? "rotate-180" : ""}`}
           aria-hidden="true"
         />
       </button>
@@ -61,15 +71,13 @@ export default function UserMenu({ user, signOutAction }) {
       {open && (
         <div
           id={menuId}
-          className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl dark:border-white/10 dark:bg-surface-dark"
+          className="absolute right-0 top-full z-50 mt-2 w-64 rounded-[18px] border border-line bg-card p-2 shadow-xl"
         >
-          <div className="border-b border-slate-200 px-3 pb-3 pt-2 dark:border-white/10">
-            <p className="truncate text-sm font-semibold text-slate-900 dark:text-white">
-              {user.name}
-            </p>
-            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{user.email}</p>
-            <span className="mt-2 inline-block rounded-full bg-brand-500/15 px-2 py-0.5 text-xs font-medium capitalize text-brand-700 dark:text-brand-300">
-              {user.role}
+          <div className="border-b border-line-subtle px-3 pb-3 pt-2">
+            <p className="truncate text-sm font-semibold text-fg">{user.name}</p>
+            <p className="truncate text-xs text-fg-muted">{user.email}</p>
+            <span className="mt-2 inline-block rounded-full bg-accent-soft px-2 py-0.5 text-xs font-medium text-accent-fg">
+              {user.roleName}
             </span>
           </div>
           <div className="pt-2">

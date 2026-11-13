@@ -2,18 +2,23 @@
 
 import { useEffect, useRef, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Bell, Menu, Search, X } from "lucide-react";
+import { Bell, Menu, Search, Settings, X } from "lucide-react";
 import StudioLogo from "@/components/brand/StudioLogo";
+import IconButton from "@/components/ui/IconButton";
 import NavItem from "./NavItem";
 import ThemeToggle from "./ThemeToggle";
 import { ACCOUNT_ITEM, NAV_ITEMS } from "./nav";
 
-// INTERIM shell (from the mockup) until the Figma UI arrives. Keep styling in
-// classes here so it is easy to restyle.
+// App shell from the confirmed Figma frames (Projects · Light 40:6 / · Dark 39:6).
+//
+// Desktop (lg+): floating navy panel, fixed 16px from top/left/bottom, 260 wide,
+// radius 22, nav-border + nav-shadow. The main column starts at 16+260+16 = 292px.
+// Below lg the same panel is an off-canvas drawer (hamburger, Escape, backdrop,
+// close on route change, scroll lock, focus in/out).
 //
 // Session-dependent parts arrive as server-rendered slots wrapped in <Suspense>
 // by app/(app)/layout.js: `teamSlot` (Team Management, superadmin only) and
-// `userMenuSlot` (avatar + dropdown).
+// `userMenuSlot` (account pill + dropdown).
 
 const isActive = (pathname, href) => (href === "/" ? pathname === "/" : pathname.startsWith(href));
 
@@ -51,7 +56,7 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
   }, [open]);
 
   return (
-    <div className="flex min-h-dvh flex-1 bg-[#F8FAFC] text-slate-900 dark:bg-navy dark:text-white dark:[color-scheme:dark]">
+    <div className="flex min-h-dvh flex-1 bg-page text-fg dark:[color-scheme:dark]">
       {/* Backdrop (mobile drawer only) */}
       <div
         aria-hidden="true"
@@ -61,28 +66,28 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
         }`}
       />
 
-      {/* Sidebar: fixed on lg+, off-canvas drawer below. Navy in both themes. */}
+      {/* Floating navbar: navy in both themes. */}
       <aside
         id="app-sidebar"
         aria-label="Main navigation"
-        className={`fixed inset-y-0 left-0 z-40 flex w-[260px] flex-col border-r border-white/10 bg-navy text-white transition-[transform,visibility] duration-200 lg:visible lg:translate-x-0 ${
-          open ? "visible translate-x-0" : "invisible -translate-x-full"
+        className={`fixed bottom-4 left-4 top-4 z-40 flex w-[260px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-[22px] border border-nav-border bg-nav-bg shadow-nav transition-[transform,visibility] duration-200 lg:visible lg:translate-x-0 ${
+          open ? "visible translate-x-0" : "invisible -translate-x-[calc(100%+16px)]"
         }`}
       >
-        <div className="flex h-16 shrink-0 items-center justify-between px-5">
-          <StudioLogo size="sm" />
+        <div className="relative flex shrink-0 justify-center px-5 py-2.5">
+          <StudioLogo size="nav" />
           <button
             ref={closeRef}
             type="button"
             onClick={close}
             aria-label="Close menu"
-            className="flex size-11 items-center justify-center rounded-lg text-white/70 hover:bg-white/5 hover:text-white focus-visible:outline-2 focus-visible:outline-brand-500 lg:hidden"
+            className="absolute right-1.5 top-1/2 flex size-11 -translate-y-1/2 items-center justify-center rounded-xl text-nav-fg hover:bg-white/[0.04] hover:text-nav-fg-active focus-visible:outline-2 focus-visible:outline-brand-500 lg:hidden"
           >
             <X className="size-5" aria-hidden="true" />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 pb-4">
+        <nav className="min-h-0 flex-1 overflow-y-auto px-3 pb-4">
           <ul className="flex flex-col gap-1">
             {NAV_ITEMS.map((item) => (
               <NavItem
@@ -94,8 +99,8 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
             ))}
             {teamSlot}
           </ul>
-          <hr className="my-3 border-white/10" />
-          <ul className="flex flex-col gap-1">
+          <hr className="mt-3 border-0 border-t border-nav-divider" />
+          <ul className="mt-3 flex flex-col gap-1">
             <NavItem
               item={ACCOUNT_ITEM}
               active={isActive(pathname, ACCOUNT_ITEM.href)}
@@ -105,57 +110,33 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
         </nav>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[260px]">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white/90 px-4 backdrop-blur dark:border-white/10 dark:bg-navy/90 sm:px-6">
-          <button
-            ref={hamburgerRef}
-            type="button"
-            onClick={() => setOpenPath(pathname)}
-            aria-label="Open menu"
-            aria-controls="app-sidebar"
-            aria-expanded={open}
-            className="flex size-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-300 dark:hover:bg-white/5 lg:hidden"
-          >
-            <Menu className="size-5" aria-hidden="true" />
-          </button>
-
-          {/* Search: visual only for now. */}
-          <div className="relative hidden min-w-0 max-w-md flex-1 sm:block">
-            <Search
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
-              aria-hidden="true"
-            />
-            <label htmlFor="app-search" className="sr-only">
-              Search
-            </label>
-            <input
-              id="app-search"
-              type="search"
-              disabled
-              aria-disabled="true"
-              title="Search is coming soon"
-              placeholder="Search projects, assets, or tasks…"
-              className="w-full cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-3 text-base text-slate-900 placeholder:text-slate-400 dark:border-white/10 dark:bg-white/5 dark:text-white sm:text-sm"
-            />
-          </div>
-
-          <div className="ml-auto flex items-center gap-1 sm:gap-2">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[292px]">
+        <header className="sticky top-0 z-20 bg-page/90 px-4 pt-4 backdrop-blur sm:px-[26px]">
+          <div className="flex h-10 items-center gap-3">
             <button
+              ref={hamburgerRef}
               type="button"
-              disabled
-              aria-disabled="true"
-              aria-label="Notifications"
-              title="Notifications are coming soon"
-              className="flex size-11 cursor-not-allowed items-center justify-center rounded-lg text-slate-400 dark:text-slate-500"
+              onClick={() => setOpenPath(pathname)}
+              aria-label="Open menu"
+              aria-controls="app-sidebar"
+              aria-expanded={open}
+              className="-ml-2 flex size-11 items-center justify-center rounded-xl text-fg hover:bg-control focus-visible:outline-2 focus-visible:outline-brand-500 lg:hidden"
             >
-              <Bell className="size-5" aria-hidden="true" />
+              <Menu className="size-5" aria-hidden="true" />
             </button>
-            <ThemeToggle />
-            {userMenuSlot}
+            <p className="truncate text-sm font-semibold text-fg">9Expert Studio</p>
+
+            <div className="ml-auto flex items-center gap-1.5">
+              <IconButton icon={Search} label="Search" title="Search is coming soon" disabled />
+              <IconButton icon={Bell} label="Notifications" title="Notifications are coming soon" disabled />
+              <IconButton icon={Settings} label="Account settings" href="/account" />
+              <ThemeToggle />
+              {userMenuSlot}
+            </div>
           </div>
         </header>
 
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">{children}</main>
+        <main className="flex-1 px-4 pb-[26px] pt-[22px] sm:px-[26px]">{children}</main>
       </div>
     </div>
   );

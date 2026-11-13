@@ -1,9 +1,9 @@
 import {
-  BarChart3,
   Briefcase,
+  ChartColumn,
   ClipboardCheck,
   FolderKanban,
-  LayoutDashboard,
+  LayoutGrid,
   Library,
   ListChecks,
   Megaphone,
@@ -12,9 +12,10 @@ import {
   Users,
 } from "lucide-react";
 
-// Sidebar menu, in spec order. `href: null` = not built yet (rendered as "Soon").
+// Sidebar menu, in Figma order. `href: null` = not built yet: rendered as a
+// non-link item (aria-disabled, "Coming soon" tooltip), never a 404.
 export const NAV_ITEMS = [
-  { label: "Dashboard", href: "/", icon: LayoutDashboard },
+  { label: "Dashboard", href: "/", icon: LayoutGrid },
   { label: "My Workspace", href: null, icon: Briefcase },
   { label: "Projects", href: null, icon: FolderKanban },
   { label: "All Tasks", href: null, icon: ListChecks },
@@ -22,7 +23,7 @@ export const NAV_ITEMS = [
   { label: "Content Library", href: null, icon: Library },
   { label: "Post Management", href: null, icon: Megaphone },
   { label: "Article Management", href: null, icon: Newspaper },
-  { label: "Reports", href: null, icon: BarChart3 },
+  { label: "Reports", href: null, icon: ChartColumn },
 ];
 
 // Rendered only for superadmin (see TeamNavItem); active for any /team/* path.

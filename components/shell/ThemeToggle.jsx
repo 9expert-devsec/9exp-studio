@@ -2,9 +2,11 @@
 
 import { useSyncExternalStore } from "react";
 import { Moon, Sun } from "lucide-react";
+import IconButton from "@/components/ui/IconButton";
 
 // Theme = `dark` class on <html> (set before paint by the script in app/layout.js).
 // The stored choice lives in localStorage under "theme"; no choice = system preference.
+// DEVIATION: not in the Figma header; added as a 4th round control (light/dark is required).
 
 const EVENT = "themechange";
 
@@ -30,18 +32,11 @@ export default function ThemeToggle() {
   };
 
   return (
-    <button
-      type="button"
+    <IconButton
+      icon={isDark ? Sun : Moon}
       onClick={toggle}
-      aria-label={isDark ? "Switch to light theme" : "Switch to dark theme"}
+      label={isDark ? "Switch to light theme" : "Switch to dark theme"}
       title={isDark ? "Light theme" : "Dark theme"}
-      className="flex size-11 items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-300 dark:hover:bg-white/5"
-    >
-      {isDark ? (
-        <Sun className="size-5" aria-hidden="true" />
-      ) : (
-        <Moon className="size-5" aria-hidden="true" />
-      )}
-    </button>
+    />
   );
 }

@@ -69,10 +69,10 @@ export default function AccountsManager({ accounts, roles, meId }) {
     <section aria-labelledby="accounts-heading" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id="accounts-heading" className="text-lg font-semibold text-slate-900 dark:text-white">
+          <h2 id="accounts-heading" className="text-lg font-semibold text-fg">
             Accounts
           </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-sm text-fg-muted">
             {accounts.length} account{accounts.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -91,7 +91,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
       <div className="flex flex-col gap-3 sm:flex-row">
         <div className="relative min-w-0 flex-1">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-slate-400"
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted"
             aria-hidden="true"
           />
           <label htmlFor="account-search" className="sr-only">Search by name or email</label>
@@ -139,7 +139,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
 
       <div className={`${card} overflow-x-auto`}>
         <table className="w-full min-w-[860px]">
-          <thead className="border-b border-slate-200 dark:border-white/10">
+          <thead className="border-b border-line">
             <tr>
               <th scope="col" className={th}>Account</th>
               <th scope="col" className={th}>Role</th>
@@ -149,10 +149,10 @@ export default function AccountsManager({ accounts, roles, meId }) {
               <th scope="col" className={`${th} text-right`}>Actions</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+          <tbody className="divide-y divide-line-subtle">
             {visible.length === 0 && (
               <tr>
-                <td colSpan={6} className={`${td} py-10 text-center text-slate-500 dark:text-slate-400`}>
+                <td colSpan={6} className={`${td} py-10 text-center text-fg-muted`}>
                   {accounts.length === 0 ? "No accounts yet." : "No accounts match these filters."}
                 </td>
               </tr>
@@ -163,24 +163,24 @@ export default function AccountsManager({ accounts, roles, meId }) {
                   <div className="flex items-center gap-3">
                     <span
                       aria-hidden="true"
-                      className="flex size-9 shrink-0 items-center justify-center rounded-full bg-brand-500 text-xs font-semibold text-white"
+                      className="flex size-9 shrink-0 items-center justify-center rounded-[10px] bg-brand-500 text-xs font-semibold text-navy"
                     >
                       {initialsOf(a.name)}
                     </span>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-slate-900 dark:text-white">
+                      <p className="truncate font-medium text-fg">
                         {a.name}
                         {a.id === meId && (
-                          <span className="ml-2 text-xs font-normal text-slate-500 dark:text-slate-400">(you)</span>
+                          <span className="ml-2 text-xs font-normal text-fg-muted">(you)</span>
                         )}
                       </p>
-                      <p className="truncate text-xs text-slate-500 dark:text-slate-400">{a.email}</p>
+                      <p className="truncate text-xs text-fg-muted">{a.email}</p>
                     </div>
                   </div>
                 </td>
                 <td className={td}>
                   <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-slate-800 dark:text-slate-100">{a.roleName}</span>
+                    <span className="text-fg">{a.roleName}</span>
                     {!a.roleKnown && (
                       <span className={pill.amber}>
                         <AlertTriangle className="mr-1 size-3" aria-hidden="true" />
@@ -192,8 +192,8 @@ export default function AccountsManager({ accounts, roles, meId }) {
                 <td className={td}>
                   <span className={STATUS[a.status].className}>{STATUS[a.status].label}</span>
                 </td>
-                <td className={`${td} whitespace-nowrap text-slate-600 dark:text-slate-300`}>{a.lastLoginLabel}</td>
-                <td className={`${td} whitespace-nowrap text-slate-600 dark:text-slate-300`}>{a.createdLabel}</td>
+                <td className={`${td} whitespace-nowrap text-fg-muted`}>{a.lastLoginLabel}</td>
+                <td className={`${td} whitespace-nowrap text-fg-muted`}>{a.createdLabel}</td>
                 <td className={`${td} text-right`}>
                   <div className="flex justify-end gap-1">
                     {a.locked && (
@@ -280,7 +280,7 @@ function AddAccountForm({ roles, onDone }) {
   if (password) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-slate-700 dark:text-slate-200">
+        <p className="text-sm text-fg">
           Account created for <strong>{name.trim()}</strong> ({email.trim().toLowerCase()}).
         </p>
         <TempPasswordNotice password={password} onDone={onDone} />
@@ -321,7 +321,7 @@ function AddAccountForm({ roles, onDone }) {
           ))}
         </select>
       </div>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-fg-muted">
         A temporary password is generated and shown once after the account is created.
       </p>
       <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>
@@ -362,7 +362,7 @@ function EditAccountForm({ account, roles, isSelf, onDone }) {
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-4">
       <div>
         <label htmlFor="edit-email" className={label}>Email</label>
-        <input id="edit-email" value={account.email} readOnly className={`${input} cursor-default bg-slate-50 dark:bg-white/[0.03]`} />
+        <input id="edit-email" value={account.email} readOnly className={`${input} cursor-default bg-card-inset`} />
       </div>
       <div>
         <label htmlFor="edit-name" className={label}>Name</label>
@@ -386,7 +386,7 @@ function EditAccountForm({ account, roles, isSelf, onDone }) {
           ))}
         </select>
       </div>
-      <label className="flex min-h-11 items-center gap-3 text-sm text-slate-700 dark:text-slate-200">
+      <label className="flex min-h-11 items-center gap-3 text-sm text-fg">
         <input
           type="checkbox"
           checked={isActive}
@@ -398,11 +398,11 @@ function EditAccountForm({ account, roles, isSelf, onDone }) {
         Active
       </label>
       {isSelf ? (
-        <p id="self-note" className="-mt-2 text-xs text-slate-500 dark:text-slate-400">
+        <p id="self-note" className="-mt-2 text-xs text-fg-muted">
           You cannot change your own role or deactivate your own account.
         </p>
       ) : (
-        <p id="active-note" className="-mt-2 text-xs text-slate-500 dark:text-slate-400">
+        <p id="active-note" className="-mt-2 text-xs text-fg-muted">
           Inactive accounts cannot sign in. Role and status changes reach an already
           signed-in user at their next sign-in.
         </p>

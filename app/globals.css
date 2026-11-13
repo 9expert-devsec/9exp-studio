@@ -3,9 +3,16 @@
 /* Class-based dark mode: add `dark` to <html> (or any ancestor). */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Interim design tokens — the final UI will come from Figma. */
+/* ==========================================================================
+   Design system colours — confirmed Figma "Media-Plan-System":
+   Orange Scale (37:74), Color Tone (37:81), Projects · Light (40:6) / · Dark (39:6).
+   Single source of truth: components use the semantic utilities below
+   (bg-page, bg-card, text-fg, border-line, …), never raw hexes or slate-*.
+   ========================================================================== */
+
+/* Theme-independent constants. */
 @theme {
-  /* Brand orange */
+  /* Orange Scale */
   --color-brand-50: #fff7ed;
   --color-brand-100: #ffedd5;
   --color-brand-200: #fed7aa;
@@ -17,9 +24,9 @@
   --color-brand-800: #9a3412;
   --color-brand-900: #7c2d12;
 
-  /* Base surfaces */
-  --color-navy: #0d1b2a; /* sidebar / header base */
-  --color-surface-dark: #1e2a3b; /* cards in dark mode */
+  --color-navy: #0d1b2a; /* brand navy; primary-button text */
+  --color-info: #2486ff; /* Brand Blue: info states ("Needs review") */
+  --color-danger-solid: #dc2626; /* destructive button fill (not in Figma yet) */
 
   /* Logo play-triangle: gentle pulse every 2.5s. Transform/opacity only, so the
      layout box never changes. */
@@ -36,6 +43,93 @@
       transform: scale(1.12);
     }
   }
+}
+
+/* Semantic tokens: light on :root, dark on .dark (class set on <html> before paint). */
+:root {
+  --ds-page: #f8fafd;
+  --ds-card: #ffffff;
+  --ds-card-inset: #f8fafd;
+  --ds-line: #e0e6ed;
+  --ds-line-subtle: #e0e6ed;
+  --ds-fg: #0d1b2a;
+  --ds-fg-muted: #617185;
+  --ds-control: #ffffff;
+  --ds-control-line: #e0e6ed; /* light controls carry a 1px `line` border */
+  --ds-track: #e4eaf0;
+  --ds-accent-fg: #9a3412;
+  --ds-accent-soft: #fff7ed;
+
+  /* Status text (not in the Figma tone set yet; chosen for AA contrast on card). */
+  --ds-success: #047857;
+  --ds-warning: #b45309;
+  --ds-danger: #dc2626;
+
+  /* Floating navbar: navy in both themes; only outline and shadow change. */
+  --ds-nav-bg: #0d1b2a;
+  --ds-nav-border: #e0e6ed;
+  --ds-nav-shadow: 0 8px 24px rgba(13, 26, 41, 0.08);
+  --ds-nav-fg: #bbbfc3;
+  --ds-nav-fg-active: #ffffff;
+  --ds-nav-active-bg: rgba(249, 115, 22, 0.16);
+  --ds-nav-divider: #e0e6ed;
+
+}
+
+.dark {
+  --ds-page: #1e1e1e;
+  --ds-card: #1a2836;
+  --ds-card-inset: #13212f;
+  --ds-line: #2f3b48;
+  --ds-line-subtle: rgba(255, 255, 255, 0.09);
+  --ds-fg: #f8fafd;
+  --ds-fg-muted: #a8aeb5;
+  --ds-control: rgba(255, 255, 255, 0.06);
+  --ds-control-line: transparent; /* no border in dark */
+  --ds-track: #394450;
+  --ds-accent-fg: #fdba74;
+  --ds-accent-soft: #3c2d26;
+
+  --ds-success: #6ee7b7;
+  --ds-warning: #fcd34d;
+  --ds-danger: #f87171;
+
+  --ds-nav-bg: #0d1b2a;
+  --ds-nav-border: rgba(255, 255, 255, 0.1);
+  --ds-nav-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
+  --ds-nav-fg: #bbbfc3;
+  --ds-nav-fg-active: #f8fafd;
+  --ds-nav-active-bg: rgba(249, 115, 22, 0.16);
+  --ds-nav-divider: rgba(255, 255, 255, 0.1);
+
+}
+
+/* Expose the semantic tokens as Tailwind utilities (bg-page, text-fg, border-line,
+   shadow-nav, …). `inline` keeps the var() reference so they switch with the theme. */
+@theme inline {
+  --color-page: var(--ds-page);
+  --color-card: var(--ds-card);
+  --color-card-inset: var(--ds-card-inset);
+  --color-line: var(--ds-line);
+  --color-line-subtle: var(--ds-line-subtle);
+  --color-fg: var(--ds-fg);
+  --color-fg-muted: var(--ds-fg-muted);
+  --color-control: var(--ds-control);
+  --color-control-line: var(--ds-control-line);
+  --color-track: var(--ds-track);
+  --color-accent-fg: var(--ds-accent-fg);
+  --color-accent-soft: var(--ds-accent-soft);
+  --color-success: var(--ds-success);
+  --color-warning: var(--ds-warning);
+  --color-danger: var(--ds-danger);
+
+  --color-nav-bg: var(--ds-nav-bg);
+  --color-nav-border: var(--ds-nav-border);
+  --color-nav-fg: var(--ds-nav-fg);
+  --color-nav-fg-active: var(--ds-nav-fg-active);
+  --color-nav-active-bg: var(--ds-nav-active-bg);
+  --color-nav-divider: var(--ds-nav-divider);
+  --shadow-nav: var(--ds-nav-shadow);
 }
 
 /* Font families: same names, order and fallbacks as genesis-lab's tailwind.config.js.

@@ -25,7 +25,7 @@ export default function Modal({ open, onClose, title, description, children }) {
       onClose={onClose}
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-2xl border border-slate-200 bg-white p-0 text-slate-900 shadow-xl backdrop:bg-black/50 dark:border-white/10 dark:bg-surface-dark dark:text-white"
+      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-[24px] border border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50"
     >
       {open && (
         <div className="p-6">
@@ -35,7 +35,7 @@ export default function Modal({ open, onClose, title, description, children }) {
                 {title}
               </h2>
               {description && (
-                <p id={descId} className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+                <p id={descId} className="mt-1 text-sm text-fg-muted">
                   {description}
                 </p>
               )}
@@ -44,7 +44,7 @@ export default function Modal({ open, onClose, title, description, children }) {
               type="button"
               onClick={onClose}
               aria-label="Close"
-              className="-mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-2 focus-visible:outline-brand-500 dark:text-slate-400 dark:hover:bg-white/5 dark:hover:text-white"
+              className="-mr-2 -mt-2 flex size-11 shrink-0 items-center justify-center rounded-full text-fg-muted hover:bg-card-inset hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
             >
               <X className="size-5" aria-hidden="true" />
             </button>

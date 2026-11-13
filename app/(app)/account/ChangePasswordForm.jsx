@@ -2,6 +2,7 @@
 
 import { startTransition, useActionState, useState } from "react";
 import { CircleCheck, Loader2 } from "lucide-react";
+import { buttonClass } from "@/components/ui/Button";
 import PasswordInput from "@/components/ui/PasswordInput";
 import { changePasswordAction } from "./actions";
 
@@ -65,10 +66,10 @@ export default function ChangePasswordForm() {
           aria-live="polite"
           className={`mt-1.5 flex items-center gap-1.5 text-xs ${
             tooLong
-              ? "text-red-600 dark:text-red-400"
+              ? "text-danger"
               : longEnough
-                ? "text-emerald-600 dark:text-emerald-400"
-                : "text-slate-500 dark:text-slate-400"
+                ? "text-success"
+                : "text-fg-muted"
           }`}
         >
           {longEnough && !tooLong && <CircleCheck className="size-3.5" aria-hidden="true" />}
@@ -91,7 +92,7 @@ export default function ChangePasswordForm() {
         <p
           id="confirmPassword-hint"
           aria-live="polite"
-          className="mt-1.5 min-h-4 text-xs text-red-600 dark:text-red-400"
+          className="mt-1.5 min-h-4 text-xs text-danger"
         >
           {mismatch ? "Passwords do not match." : ""}
         </p>
@@ -100,7 +101,7 @@ export default function ChangePasswordForm() {
       <button
         type="submit"
         disabled={isPending}
-        className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brand-500 px-4 py-2.5 text-base font-semibold text-white transition-colors hover:bg-brand-600 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-70 disabled:hover:bg-brand-500 sm:self-start sm:text-sm"
+        className={buttonClass("primary", "sm:self-start")}
       >
         {isPending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
         {isPending ? "Updating…" : "Update password"}
@@ -109,7 +110,7 @@ export default function ChangePasswordForm() {
       <p
         aria-live="polite"
         className={`min-h-5 text-sm ${
-          state?.ok ? "text-emerald-600 dark:text-emerald-400" : "text-red-600 dark:text-red-400"
+          state?.ok ? "text-success" : "text-danger"
         }`}
       >
         {state?.ok ? "Password updated." : (state?.error ?? "")}

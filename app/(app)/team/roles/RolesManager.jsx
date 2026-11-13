@@ -53,10 +53,10 @@ export default function RolesManager({ roles }) {
     <section aria-labelledby="roles-heading" className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 id="roles-heading" className="text-lg font-semibold text-slate-900 dark:text-white">
+          <h2 id="roles-heading" className="text-lg font-semibold text-fg">
             Roles
           </h2>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-sm text-fg-muted">
             Each account has exactly one role. Permissions are pending confirmation.
           </p>
         </div>
@@ -68,12 +68,12 @@ export default function RolesManager({ roles }) {
 
       {roles.length === 0 ? (
         <div className={`${card} flex flex-col items-center gap-3 px-6 py-14 text-center`}>
-          <span className="flex size-12 items-center justify-center rounded-xl bg-brand-500/15 text-brand-500">
+          <span className="flex size-12 items-center justify-center rounded-[18px] bg-accent-soft text-brand-500">
             <ShieldCheck className="size-6" aria-hidden="true" />
           </span>
-          <p className="text-sm text-slate-600 dark:text-slate-300">
+          <p className="text-sm text-fg-muted">
             No roles yet — run{" "}
-            <code className="rounded bg-slate-100 px-1.5 py-0.5 font-mono text-xs text-slate-800 dark:bg-white/10 dark:text-slate-100">
+            <code className="rounded bg-card-inset px-1.5 py-0.5 font-mono text-xs text-fg">
               npm run seed-roles
             </code>
           </p>
@@ -85,7 +85,7 @@ export default function RolesManager({ roles }) {
       ) : (
         <div className={`${card} overflow-x-auto`}>
           <table className="w-full min-w-[720px]">
-            <thead className="border-b border-slate-200 dark:border-white/10">
+            <thead className="border-b border-line">
               <tr>
                 <th scope="col" className={th}>Name</th>
                 <th scope="col" className={th}>Key</th>
@@ -94,7 +94,7 @@ export default function RolesManager({ roles }) {
                 <th scope="col" className={`${th} text-right`}>Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-200 dark:divide-white/10">
+            <tbody className="divide-y divide-line-subtle">
               {roles.map((role) => {
                 const blocked = deleteBlockReason(role);
                 const reasonId = `delete-reason-${role.id}`;
@@ -102,15 +102,15 @@ export default function RolesManager({ roles }) {
                   <tr key={role.id}>
                     <td className={td}>
                       <span className="flex flex-wrap items-center gap-2">
-                        <span className="font-medium text-slate-900 dark:text-white">{role.name}</span>
+                        <span className="font-medium text-fg">{role.name}</span>
                         {role.isSystem && <span className={pill.brand}>System</span>}
                       </span>
                     </td>
-                    <td className={`${td} font-mono text-xs text-slate-600 dark:text-slate-300`}>
+                    <td className={`${td} font-mono text-xs text-fg-muted`}>
                       {role.key}
                     </td>
-                    <td className={`${td} max-w-xs text-slate-600 dark:text-slate-300`}>
-                      {role.description || <span className="text-slate-400">—</span>}
+                    <td className={`${td} max-w-xs text-fg-muted`}>
+                      {role.description || <span className="text-fg-muted">—</span>}
                     </td>
                     <td className={`${td} text-right tabular-nums`}>{role.accountCount}</td>
                     <td className={`${td} text-right`}>
@@ -130,7 +130,7 @@ export default function RolesManager({ roles }) {
                             disabled={!!blocked}
                             aria-describedby={blocked ? reasonId : undefined}
                             onClick={() => setModal({ type: "delete", role })}
-                            className={`${btnRow} hover:text-red-600 dark:hover:text-red-400`}
+                            className={`${btnRow} hover:text-danger`}
                             aria-label={`Delete ${role.name}`}
                           >
                             <Trash2 className="size-3.5" aria-hidden="true" />
@@ -138,7 +138,7 @@ export default function RolesManager({ roles }) {
                           </button>
                         </div>
                         {blocked && (
-                          <span id={reasonId} className="text-xs text-slate-500 dark:text-slate-400">
+                          <span id={reasonId} className="text-xs text-fg-muted">
                             {blocked}
                           </span>
                         )}
@@ -230,9 +230,9 @@ function RoleForm({ role, existingKeys = [], onDone }) {
               value={role.key}
               readOnly
               aria-describedby="role-key-hint"
-              className={`${input} cursor-default bg-slate-50 font-mono dark:bg-white/[0.03]`}
+              className={`${input} cursor-default bg-card-inset font-mono`}
             />
-            <p id="role-key-hint" className="mt-1.5 flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+            <p id="role-key-hint" className="mt-1.5 flex items-center gap-1.5 text-xs text-fg-muted">
               <Lock className="size-3" aria-hidden="true" />
               The key cannot change: accounts reference it.
             </p>
@@ -258,7 +258,7 @@ function RoleForm({ role, existingKeys = [], onDone }) {
               id="role-key-hint"
               aria-live="polite"
               className={`mt-1.5 text-xs ${
-                keyInvalid || keyTaken ? "text-red-600 dark:text-red-400" : "text-slate-500 dark:text-slate-400"
+                keyInvalid || keyTaken ? "text-danger" : "text-fg-muted"
               }`}
             >
               {keyTaken
@@ -271,7 +271,7 @@ function RoleForm({ role, existingKeys = [], onDone }) {
 
       <div>
         <label htmlFor="role-description" className={label}>
-          Description <span className="font-normal text-slate-400">(optional)</span>
+          Description <span className="font-normal text-fg-muted">(optional)</span>
         </label>
         <textarea
           id="role-description"
@@ -287,10 +287,10 @@ function RoleForm({ role, existingKeys = [], onDone }) {
         <fieldset
           disabled
           aria-describedby="permissions-pending"
-          className="rounded-xl border border-dashed border-slate-300 p-4 opacity-80 dark:border-white/15"
+          className="rounded-xl border border-dashed border-line bg-card-inset p-4 opacity-80"
         >
-          <legend className="px-1 text-sm font-medium text-slate-700 dark:text-slate-200">Permissions</legend>
-          <p id="permissions-pending" className="text-sm text-slate-500 dark:text-slate-400">
+          <legend className="px-1 text-sm font-medium text-fg">Permissions</legend>
+          <p id="permissions-pending" className="text-sm text-fg-muted">
             Pending confirmation — permissions will be added once the role matrix is approved.
           </p>
         </fieldset>

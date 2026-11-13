@@ -5,6 +5,7 @@ import Image from "next/image";
 // Overall box ≈ 439 × 171 Figma px (6.859em × 2.672em).
 const SIZES = {
   sm: "text-[14px]",
+  nav: "text-[17.5px]", // floating navbar: 6.859em × 17.5 ≈ 120 × 47 (Figma logo slot 120×50)
   md: "text-[20px]",
   lg: "text-[28px]",
 };

@@ -2,6 +2,8 @@
 // by app/(app)/layout.js (required under cacheComponents).
 
 import { auth, signOut } from "@/auth";
+import dbConnect from "@/lib/db";
+import Role from "@/models/Role";
 import TeamNavLink from "./TeamNavLink";
 import UserMenu from "./UserMenu";
 
@@ -11,6 +13,19 @@ export async function TeamNavItem() {
   const session = await auth();
   if (session?.user?.role !== "superadmin") return null;
   return <TeamNavLink />;
+}
+
+// Display name for a role key (the pill shows "Super Admin", not "superadmin").
+// Falls back to the key if the role doc is missing or the DB is unreachable.
+async function roleNameFor(key) {
+  if (!key) return "";
+  try {
+    await dbConnect();
+    const role = await Role.findOne({ key }).select("name").lean();
+    return role?.name ?? key;
+  } catch {
+    return key;
+  }
 }
 
 export async function UserMenuSlot() {
@@ -25,7 +40,11 @@ export async function UserMenuSlot() {
 
   return (
     <UserMenu
-      user={{ name: user.name ?? "", email: user.email ?? "", role: user.role ?? "" }}
+      user={{
+        name: user.name ?? "",
+        email: user.email ?? "",
+        roleName: await roleNameFor(user.role),
+      }}
       signOutAction={signOutAction}
     />
   );
@@ -33,9 +52,12 @@ export async function UserMenuSlot() {
 
 export function UserMenuSkeleton() {
   return (
-    <div className="flex min-h-11 items-center gap-1.5 p-1 pr-2" aria-hidden="true">
-      <span className="size-9 animate-pulse rounded-full bg-slate-200 dark:bg-white/10" />
-      <span className="h-3 w-4 rounded bg-slate-200 dark:bg-white/10" />
+    <div
+      className="flex h-[34px] items-center gap-2 rounded-[18px] border border-control-line bg-control p-1 pr-2"
+      aria-hidden="true"
+    >
+      <span className="size-6 animate-pulse rounded-[10px] bg-track" />
+      <span className="hidden h-3 w-16 animate-pulse rounded bg-track sm:block" />
     </div>
   );
 }

@@ -8,12 +8,13 @@ const TABS = [
   { label: "Roles", href: "/team/roles" },
 ];
 
+// Figma view-switcher style: `control` pill track; the selected tab is brand-500 with navy text.
 export default function TeamTabs() {
   const pathname = usePathname();
 
   return (
-    <nav aria-label="Team Management sections" className="border-b border-slate-200 dark:border-white/10">
-      <ul className="-mb-px flex gap-1">
+    <nav aria-label="Team Management sections">
+      <ul className="inline-flex gap-1 rounded-full border border-control-line bg-control p-1">
         {TABS.map((tab) => {
           const active = pathname.startsWith(tab.href);
           return (
@@ -21,10 +22,8 @@ export default function TeamTabs() {
               <Link
                 href={tab.href}
                 aria-current={active ? "page" : undefined}
-                className={`inline-flex min-h-11 items-center border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-brand-500 ${
-                  active
-                    ? "border-brand-500 text-slate-900 dark:text-white"
-                    : "border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
+                className={`inline-flex min-h-9 items-center rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
+                  active ? "bg-brand-500 text-navy" : "text-fg-muted hover:text-fg"
                 }`}
               >
                 {tab.label}
