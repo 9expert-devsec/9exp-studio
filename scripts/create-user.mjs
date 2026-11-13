@@ -7,15 +7,16 @@
 // Plain Node script: no Next.js-only modules.
 
 import { parseArgs } from "node:util";
-import { randomBytes } from "node:crypto";
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
-import User, { USER_ROLES } from "../models/User.js";
+import User from "../models/User.js";
+import Role from "../models/Role.js";
+import { generateTemporaryPassword } from "../lib/password.js";
 
 const USAGE = `Usage:
   npm run create-user -- --email <email> --name "<name>" --role <role>
 
-  Roles: ${USER_ROLES.join(" | ")}
+  Role: any key in the roles collection (run "npm run seed-roles" first).
 
 Example:
   npm run create-user -- --email you@9expert.co.th --name "Name" --role superadmin`;
@@ -23,11 +24,6 @@ Example:
 function fail(message) {
   console.error(`Error: ${message}\n\n${USAGE}`);
   process.exit(1);
-}
-
-function generatePassword() {
-  // 18 random bytes -> 24 URL-safe characters (~144 bits of entropy).
-  return randomBytes(18).toString("base64url");
 }
 
 async function main() {
@@ -53,13 +49,12 @@ async function main() {
 
   const email = values.email?.trim().toLowerCase();
   const name = values.name?.trim();
-  const role = values.role?.trim();
+  const role = values.role?.trim().toLowerCase();
 
   if (!email) fail("--email is required.");
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) fail(`"${email}" is not a valid email.`);
   if (!name) fail("--name is required.");
   if (!role) fail("--role is required.");
-  if (!USER_ROLES.includes(role)) fail(`"${role}" is not a valid role.`);
 
   const uri = process.env.MONGODB_URI;
   const dbName = process.env.MONGODB_DB_NAME;
@@ -70,13 +65,24 @@ async function main() {
   await mongoose.connect(uri, { dbName });
 
   try {
+    // Roles live in the `roles` collection (no enum on the User model).
+    if (!(await Role.exists({ key: role }))) {
+      const keys = (await Role.find().select("key").sort({ key: 1 }).lean()).map((r) => r.key);
+      const hint = keys.length
+        ? `Roles: ${keys.join(" | ")}`
+        : 'No roles yet: run "npm run seed-roles" first.';
+      console.error(`Error: "${role}" is not a role in the database. ${hint} Nothing was changed.`);
+      process.exitCode = 1;
+      return;
+    }
+
     if (await User.exists({ email })) {
       console.error(`Error: a user with email ${email} already exists. Nothing was changed.`);
       process.exitCode = 1;
       return;
     }
 
-    const password = generatePassword();
+    const password = generateTemporaryPassword();
     const passwordHash = await bcrypt.hash(password, 12);
     await User.create({ email, name, role, passwordHash });
 

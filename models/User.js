@@ -1,16 +1,5 @@
 import mongoose from "mongoose";
 
-// NOTE: Provisional role set, taken from the flowchart.
-// The final role set is still undecided — revisit before building permissions.
-export const USER_ROLES = [
-  "superadmin",
-  "manager",
-  "editor",
-  "graphic",
-  "publisher",
-  "writer",
-];
-
 const UserSchema = new mongoose.Schema(
   {
     email: {
@@ -22,7 +11,9 @@ const UserSchema = new mongoose.Schema(
     },
     name: { type: String, required: true, trim: true },
     passwordHash: { type: String, required: true, select: false },
-    role: { type: String, enum: USER_ROLES, default: "editor" },
+    // A Role `key` (models/Role.js). No enum: roles live in the `roles` collection,
+    // and the server actions / scripts check the key exists before writing it.
+    role: { type: String, required: true, lowercase: true, trim: true },
     isActive: { type: Boolean, default: true },
     failedLoginCount: { type: Number, default: 0 },
     lockedUntil: { type: Date },

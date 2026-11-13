@@ -25,7 +25,12 @@ export const NAV_ITEMS = [
   { label: "Reports", href: null, icon: BarChart3 },
 ];
 
-// Rendered only for superadmin (see TeamNavItem).
-export const TEAM_ITEM = { label: "Team Management", href: null, icon: Users };
+// Rendered only for superadmin (see TeamNavItem); active for any /team/* path.
+export const TEAM_ITEM = {
+  label: "Team Management",
+  href: "/team/accounts",
+  activePrefix: "/team",
+  icon: Users,
+};
 
 export const ACCOUNT_ITEM = { label: "Account", href: "/account", icon: Settings };

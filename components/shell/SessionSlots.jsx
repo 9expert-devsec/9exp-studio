@@ -2,14 +2,15 @@
 // by app/(app)/layout.js (required under cacheComponents).
 
 import { auth, signOut } from "@/auth";
-import NavItem from "./NavItem";
+import TeamNavLink from "./TeamNavLink";
 import UserMenu from "./UserMenu";
-import { TEAM_ITEM } from "./nav";
 
+// Display only: hides the link from non-superadmins. Access itself is enforced
+// server-side by app/(app)/team/** (pages and actions re-read the role from the DB).
 export async function TeamNavItem() {
   const session = await auth();
   if (session?.user?.role !== "superadmin") return null;
-  return <NavItem item={TEAM_ITEM} />;
+  return <TeamNavLink />;
 }
 
 export async function UserMenuSlot() {

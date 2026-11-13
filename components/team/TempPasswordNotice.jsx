@@ -1,0 +1,60 @@
+"use client";
+
+import { useState } from "react";
+import { Check, Copy, KeyRound } from "lucide-react";
+import { btnPrimary, btnSecondary } from "./styles";
+
+// Shows a temporary password ONCE. The value lives only in the parent's state and
+// is dropped when the modal closes; it is never stored or logged.
+export default function TempPasswordNotice({ password, onDone }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(password);
+      setCopied(true);
+    } catch {
+      setCopied(false);
+    }
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4">
+        <p className="mb-2 flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+          <KeyRound className="size-4" aria-hidden="true" />
+          Temporary password (shown once)
+        </p>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <label htmlFor="temp-password" className="sr-only">
+            Temporary password
+          </label>
+          <input
+            id="temp-password"
+            readOnly
+            value={password}
+            onFocus={(e) => e.target.select()}
+            className="min-h-11 min-w-0 flex-1 rounded-lg border border-slate-300 bg-white px-3 font-mono text-sm text-slate-900 dark:border-white/15 dark:bg-navy dark:text-white"
+          />
+          <button type="button" onClick={copy} className={btnSecondary}>
+            {copied ? (
+              <Check className="size-4" aria-hidden="true" />
+            ) : (
+              <Copy className="size-4" aria-hidden="true" />
+            )}
+            {copied ? "Copied" : "Copy"}
+          </button>
+        </div>
+        <p aria-live="polite" className="sr-only">
+          {copied ? "Password copied to clipboard." : ""}
+        </p>
+      </div>
+      <p className="text-sm text-slate-600 dark:text-slate-300">
+        Share it securely; ask the user to change it on the Account page.
+      </p>
+      <button type="button" onClick={onDone} className={`${btnPrimary} sm:self-end`}>
+        Done
+      </button>
+    </div>
+  );
+}
