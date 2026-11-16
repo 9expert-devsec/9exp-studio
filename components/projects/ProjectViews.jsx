@@ -110,11 +110,10 @@ const td = "px-4 py-3 align-middle text-sm";
 export function ProjectsTable({ projects }) {
   return (
     <div className={`${cardClass({ padded: false })} overflow-x-auto`}>
-      <table className="w-full min-w-[960px]">
+      <table className="w-full min-w-[880px]">
         <thead className="border-b border-line">
           <tr>
             <th scope="col" className={th}>Project</th>
-            <th scope="col" className={th}>Type</th>
             <th scope="col" className={th}>Status</th>
             <th scope="col" className={th}>Progress</th>
             <th scope="col" className={th}>Team</th>
@@ -137,7 +136,6 @@ export function ProjectsTable({ projects }) {
                   <span className="truncate">{p.name}</span>
                 </Link>
               </td>
-              <td className={`${td} text-fg-muted`}>{p.typeLabel}</td>
               <td className={td}>
                 <StatusChip status={p.status} />
               </td>
@@ -156,7 +154,7 @@ export function ProjectsTable({ projects }) {
                   <span className="truncate text-fg">{p.owner.name}</span>
                 </div>
               </td>
-              <td className={`${td} whitespace-nowrap text-fg-muted`}>{p.datesLabel}</td>
+              <td className={`${td} whitespace-nowrap text-fg-muted`}>{p.datesLabel || "—"}</td>
               <td className={`${td} text-right`}>
                 <ProjectMenu project={p} className="inline-block" />
               </td>

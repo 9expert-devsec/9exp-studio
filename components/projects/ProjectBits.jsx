@@ -51,8 +51,10 @@ export function Chip({ children, className = "" }) {
   );
 }
 
-/** Thin rounded progress bar (accent fill on the track token). */
-export function ProgressBar({ value = 0, label, className = "" }) {
+const TRACK = { neutral: "bg-track", accent: "bg-accent-soft" };
+
+/** Thin rounded progress bar: accent fill on the track token (tone="accent": light-accent track). */
+export function ProgressBar({ value = 0, label, tone = "neutral", className = "" }) {
   const pct = Math.max(0, Math.min(100, Math.round(value)));
   return (
     <div
@@ -61,7 +63,7 @@ export function ProgressBar({ value = 0, label, className = "" }) {
       aria-valuemax={100}
       aria-valuenow={pct}
       aria-label={label ?? "Project progress"}
-      className={`h-1.5 w-full overflow-hidden rounded-full bg-track ${className}`}
+      className={`h-1.5 w-full overflow-hidden rounded-full ${TRACK[tone] ?? TRACK.neutral} ${className}`}
     >
       <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
     </div>

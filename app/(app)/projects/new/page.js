@@ -32,7 +32,7 @@ async function NewProjectForm() {
     <ProjectForm
       mode="create"
       cancelHref="/projects"
-      initial={{ type: "ongoing", owner: viewerAsOwner(viewer), members: [] }}
+      initial={{ owner: viewerAsOwner(viewer), members: [] }}
     />
   );
 }

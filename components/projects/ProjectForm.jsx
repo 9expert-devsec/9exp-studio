@@ -12,11 +12,12 @@ import { DEFAULT_PROJECT_ICON, PROJECT_DESCRIPTION_MAX, PROJECT_NAME_MAX } from 
 import MemberPicker from "./MemberPicker";
 import { ProjectIconTile, StatusChip } from "./ProjectBits";
 
-const label = "mb-1.5 block text-sm font-medium text-fg";
-const input =
+// Field styles shared with ContentForm.
+export const label = "mb-1.5 block text-sm font-medium text-fg";
+export const input =
   "min-h-11 w-full rounded-[10px] border border-line bg-card px-3.5 py-2.5 text-base text-fg outline-none transition-colors placeholder:text-fg-muted focus:border-brand-500 focus:ring-1 focus:ring-brand-500 aria-[invalid=true]:border-danger sm:text-sm";
 
-function FieldError({ id, error }) {
+export function FieldError({ id, error }) {
   return (
     <p id={id} role={error ? "alert" : undefined} className="mt-1.5 min-h-4 text-xs text-danger">
       {error ?? ""}
@@ -30,14 +31,13 @@ function FieldError({ id, error }) {
  * redirects to /projects/[id].
  *
  * @param {{ mode: "create" | "edit", initial: object, cancelHref: string }} props
- *   initial: { id?, name, icon, type, startDate, endDate, description, briefLink,
+ *   initial: { id?, name, icon, startDate, endDate, description, briefLink,
  *              status?, owner: {id,name,avatarUrl}, members: [{id,name,email,avatarUrl}] }
  */
 export default function ProjectForm({ mode, initial, cancelHref }) {
   const isEdit = mode === "edit";
   const [icon, setIcon] = useState(initial.icon || DEFAULT_PROJECT_ICON);
   const [name, setName] = useState(initial.name ?? "");
-  const [type, setType] = useState(initial.type || "ongoing");
   const [startDate, setStartDate] = useState(initial.startDate ?? "");
   const [endDate, setEndDate] = useState(initial.endDate ?? "");
   const [description, setDescription] = useState(initial.description ?? "");
@@ -47,11 +47,6 @@ export default function ProjectForm({ mode, initial, cancelHref }) {
   const [formError, setFormError] = useState("");
   const [pending, startTransition] = useTransition();
 
-  const chooseType = (next) => {
-    setType(next);
-    if (next === "ongoing") setEndDate(""); // ongoing has no end date
-  };
-
   const onSubmit = (e) => {
     e.preventDefault();
     setFormError("");
@@ -59,9 +54,8 @@ export default function ProjectForm({ mode, initial, cancelHref }) {
     if (isEdit) fd.set("id", initial.id);
     fd.set("icon", icon);
     fd.set("name", name);
-    fd.set("type", type);
     fd.set("startDate", startDate);
-    if (type === "campaign") fd.set("endDate", endDate);
+    fd.set("endDate", endDate);
     fd.set("description", description);
     fd.set("briefLink", briefLink);
     for (const m of members) fd.append("members", m.id);
@@ -79,22 +73,6 @@ export default function ProjectForm({ mode, initial, cancelHref }) {
   const err = (field) => errors[field];
   const errId = (field) => `project-${field}-error`;
   const aria = (field) => ({ "aria-invalid": !!err(field) || undefined, "aria-describedby": errId(field) });
-
-  const segment = (value, text) => (
-    <label className="relative">
-      <input
-        type="radio"
-        name="project-type"
-        value={value}
-        checked={type === value}
-        onChange={() => chooseType(value)}
-        className="peer sr-only"
-      />
-      <span className="inline-flex min-h-9 cursor-pointer items-center rounded-full px-4 text-sm font-semibold text-fg-muted transition-colors peer-checked:bg-brand-500 peer-checked:text-navy peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-brand-500">
-        {text}
-      </span>
-    </label>
-  );
 
   return (
     <form onSubmit={onSubmit} noValidate className={cardClass({ padded: false, className: "mx-auto flex w-full max-w-[880px] flex-col gap-6 p-5 sm:p-7" })}>
@@ -137,39 +115,37 @@ export default function ProjectForm({ mode, initial, cancelHref }) {
         <FieldError id={errId("name")} error={err("name")} />
       </div>
 
-      {/* 3. Type + dates */}
-      <div className="flex flex-col gap-4">
-        <fieldset>
-          <legend className={label}>Project type</legend>
-          <div className="inline-flex gap-1 rounded-full border border-control-line bg-control p-1">
-            {segment("ongoing", "Ongoing")}
-            {segment("campaign", "Campaign")}
-          </div>
-          <FieldError id={errId("type")} error={err("type")} />
-        </fieldset>
-
-        <div className={`grid gap-4 ${type === "campaign" ? "sm:grid-cols-2" : "sm:max-w-sm"}`}>
-          <div>
-            <label htmlFor="project-start" className={label}>Start date</label>
-            <input id="project-start" type="date" required value={startDate} onChange={(e) => setStartDate(e.target.value)} className={input} {...aria("startDate")} />
-            <FieldError id={errId("startDate")} error={err("startDate")} />
-          </div>
-          {type === "campaign" && (
-            <div>
-              <label htmlFor="project-end" className={label}>End date</label>
-              <input
-                id="project-end"
-                type="date"
-                required
-                min={startDate || undefined}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className={input}
-                {...aria("endDate")}
-              />
-              <FieldError id={errId("endDate")} error={err("endDate")} />
-            </div>
-          )}
+      {/* 3. Dates (every project is a Campaign; both dates optional) */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="project-start" className={label}>
+            Start date <span className="font-normal text-fg-muted">(optional)</span>
+          </label>
+          <input
+            id="project-start"
+            type="date"
+            max={endDate || undefined}
+            value={startDate}
+            onChange={(e) => setStartDate(e.target.value)}
+            className={input}
+            {...aria("startDate")}
+          />
+          <FieldError id={errId("startDate")} error={err("startDate")} />
+        </div>
+        <div>
+          <label htmlFor="project-end" className={label}>
+            End date <span className="font-normal text-fg-muted">(optional)</span>
+          </label>
+          <input
+            id="project-end"
+            type="date"
+            min={startDate || undefined}
+            value={endDate}
+            onChange={(e) => setEndDate(e.target.value)}
+            className={input}
+            {...aria("endDate")}
+          />
+          <FieldError id={errId("endDate")} error={err("endDate")} />
         </div>
       </div>
 

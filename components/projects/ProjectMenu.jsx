@@ -16,41 +16,33 @@ import {
 const itemClass =
   "flex min-h-10 w-full items-center gap-2.5 rounded-xl px-3 text-left text-sm text-fg hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-brand-500 disabled:cursor-not-allowed disabled:opacity-60";
 
+const VIEWPORT_MARGIN = 8;
+const GAP = 8;
+
 /**
- * "⋯" menu for a project (cards, table rows, detail header).
- * Items: Open · Pin/Unpin · Copy link · Edit* · Cancel project* / Reopen*
- * (* owner/admin only, via the server-computed flags; the actions re-check).
- * Sits above a card's full-cover link, so clicks never navigate the card.
+ * The "⋯" dropdown shell shared by ProjectMenu and ContentMenu (controlled: the
+ * caller owns `open`). Sits above a card's full-cover link, so clicks never
+ * navigate the card.
  *
  * The open dropdown is PORTALED into document.body (z-50: above page content, below
  * the native <dialog> top layer used by Modal). Rendered inside the row/card, it was
  * trapped in the trigger wrapper's stacking context (`relative z-10`) and later
  * rows' wrappers painted over it. Positioned before paint from the trigger's rect:
  * right edges aligned, opens upward when there isn't room below, clamped 8px inside
- * the viewport. Keyboard: opens focused on the first item; ↑/↓/Home/End move;
- * Escape or Tab closes and returns focus to the trigger.
+ * the viewport. Closes on outside click, scroll and resize. Keyboard: opens focused
+ * on the first item; ↑/↓/Home/End move; Escape or Tab closes and returns focus to
+ * the trigger.
+ *
+ * `aside` renders inside the trigger wrapper (live regions, a Modal), so it keeps
+ * the wrapper's pointer-events inside cards.
  */
-const VIEWPORT_MARGIN = 8;
-const GAP = 8;
-export default function ProjectMenu({
-  project,
-  showOpen = true,
-  showPin = true,
-  showCopy = true,
-  showEdit = true,
-  className = "",
-}) {
-  const [open, setOpen] = useState(false);
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [error, setError] = useState("");
-  const [pending, startTransition] = useTransition();
+function ActionMenu({ label, open, setOpen, onToggle, className = "", children, aside }) {
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
   const menuRef = useRef(null);
   const menuId = useId();
 
-  // Position the portaled menu before paint (DOM styles, no state), then focus it.
+  // Position the portaled menu before paint (DOM styles, no state).
   useLayoutEffect(() => {
     if (!open) return;
     const menu = menuRef.current;
@@ -115,18 +107,103 @@ export default function ProjectMenu({
       window.removeEventListener("scroll", onMove, true);
       window.removeEventListener("resize", onMove);
     };
-  }, [open]);
+  }, [open, setOpen]);
 
-  const toggle = () => {
-    setError("");
-    setOpen((v) => !v);
-  };
+  return (
+    <div ref={rootRef} className={`relative z-10 ${className}`}>
+      <IconButton
+        ref={buttonRef}
+        icon={MoreHorizontal}
+        label={label}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        aria-controls={menuId}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          onToggle?.();
+          setOpen((v) => !v);
+        }}
+      />
 
+      {open &&
+        createPortal(
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            aria-label={label}
+            // Hidden until useLayoutEffect has positioned it (still before paint).
+            style={{ top: 0, left: 0, visibility: "hidden" }}
+            className="fixed z-50 w-56 rounded-[18px] border border-line bg-card p-1.5 shadow-xl"
+          >
+            {children}
+          </div>,
+          document.body
+        )}
+      {aside}
+    </div>
+  );
+}
+
+/** Clipboard copy with a 1.5s "Copied" flag. */
+function useCopyLink(onError) {
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
     const t = setTimeout(() => setCopied(false), 1500);
     return () => clearTimeout(t);
   }, [copied]);
+  const copy = async (url) => {
+    try {
+      await navigator.clipboard.writeText(new URL(url, window.location.origin).toString());
+      setCopied(true);
+    } catch {
+      onError("Could not copy the link.");
+    }
+  };
+  return [copied, copy];
+}
+
+function CopyItem({ copied, onClick, label }) {
+  return (
+    <button role="menuitem" type="button" className={itemClass} onClick={onClick}>
+      {copied ? (
+        <Check className="size-4 text-success" aria-hidden="true" />
+      ) : (
+        <Link2 className="size-4 text-fg-muted" aria-hidden="true" />
+      )}
+      {copied ? "Copied" : label}
+    </button>
+  );
+}
+
+function MenuError({ error }) {
+  return (
+    <p role="alert" className={error ? "px-3 py-1.5 text-xs text-danger" : "sr-only"}>
+      {error}
+    </p>
+  );
+}
+
+/**
+ * "⋯" menu for a project (cards, table rows, detail header).
+ * Items: Open · Pin/Unpin · Copy link · Edit* · Cancel project* / Reopen*
+ * (* owner/admin only, via the server-computed flags; the actions re-check).
+ */
+export default function ProjectMenu({
+  project,
+  showOpen = true,
+  showPin = true,
+  showCopy = true,
+  showEdit = true,
+  className = "",
+}) {
+  const [open, setOpen] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+  const [copied, copy] = useCopyLink(setError);
 
   const run = (action, { close = true } = {}) => {
     setError("");
@@ -143,116 +220,124 @@ export default function ProjectMenu({
     });
   };
 
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(new URL(project.href, window.location.origin).toString());
-      setCopied(true);
-    } catch {
-      setError("Could not copy the link.");
-    }
-  };
+  return (
+    <ActionMenu
+      label={`Actions for ${project.name}`}
+      open={open}
+      setOpen={setOpen}
+      onToggle={() => setError("")}
+      className={className}
+      aside={
+        <>
+          <span aria-live="polite" className="sr-only">{copied ? "Link copied" : ""}</span>
+          <Modal
+            open={confirmCancel}
+            onClose={() => setConfirmCancel(false)}
+            title="Cancel this project?"
+            description={`“${project.name}” will be marked Cancelled. You can reopen it later.`}
+          >
+            <CancelConfirm project={project} onDone={() => setConfirmCancel(false)} />
+          </Modal>
+        </>
+      }
+    >
+      {showOpen && (
+        <Link role="menuitem" href={project.href} className={itemClass} onClick={() => setOpen(false)}>
+          <ExternalLink className="size-4 text-fg-muted" aria-hidden="true" />
+          Open
+        </Link>
+      )}
+      {showPin && (
+        <button role="menuitem" type="button" className={itemClass} disabled={pending} onClick={() => run(togglePinAction)}>
+          {project.pinned ? (
+            <PinOff className="size-4 text-fg-muted" aria-hidden="true" />
+          ) : (
+            <Pin className="size-4 text-fg-muted" aria-hidden="true" />
+          )}
+          {project.pinned ? "Unpin" : "Pin"}
+        </button>
+      )}
+      {showCopy && <CopyItem copied={copied} onClick={() => copy(project.href)} label="Copy link" />}
+      {showEdit && project.canEdit && (
+        <Link role="menuitem" href={`${project.href}/edit`} className={itemClass} onClick={() => setOpen(false)}>
+          <Pencil className="size-4 text-fg-muted" aria-hidden="true" />
+          Edit
+        </Link>
+      )}
+      {project.canCancel && (
+        <button
+          role="menuitem"
+          type="button"
+          className={`${itemClass} text-danger`}
+          onClick={() => {
+            setOpen(false);
+            setConfirmCancel(true);
+          }}
+        >
+          <Ban className="size-4" aria-hidden="true" />
+          Cancel project
+        </button>
+      )}
+      {project.canReopen && (
+        <button role="menuitem" type="button" className={itemClass} disabled={pending} onClick={() => run(reopenProjectAction)}>
+          <RotateCcw className="size-4 text-fg-muted" aria-hidden="true" />
+          Reopen
+        </button>
+      )}
+      {pending && (
+        <p className="flex items-center gap-2 px-3 py-1.5 text-xs text-fg-muted">
+          <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Working…
+        </p>
+      )}
+      <MenuError error={error} />
+    </ActionMenu>
+  );
+}
+
+/**
+ * "⋯" menu for a content card: Open brief · Copy brief link (only with a brief) ·
+ * Edit (only when content.canEdit; the update action re-checks). Renders nothing
+ * when no item applies.
+ */
+export function ContentMenu({ content }) {
+  const [open, setOpen] = useState(false);
+  const [error, setError] = useState("");
+  const [copied, copy] = useCopyLink(setError);
+  if (!content.briefLink && !content.canEdit) return null;
 
   return (
-    <div ref={rootRef} className={`relative z-10 ${className}`}>
-      <IconButton
-        ref={buttonRef}
-        icon={MoreHorizontal}
-        label={`Actions for ${project.name}`}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-controls={menuId}
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          toggle();
-        }}
-      />
-
-      {open &&
-        createPortal(
-        <div
-          ref={menuRef}
-          id={menuId}
-          role="menu"
-          aria-label={`Actions for ${project.name}`}
-          // Hidden until useLayoutEffect has positioned it (still before paint).
-          style={{ top: 0, left: 0, visibility: "hidden" }}
-          className="fixed z-50 w-56 rounded-[18px] border border-line bg-card p-1.5 shadow-xl"
-        >
-          {showOpen && (
-            <Link role="menuitem" href={project.href} className={itemClass} onClick={() => setOpen(false)}>
-              <ExternalLink className="size-4 text-fg-muted" aria-hidden="true" />
-              Open
-            </Link>
-          )}
-          {showPin && (
-            <button role="menuitem" type="button" className={itemClass} disabled={pending} onClick={() => run(togglePinAction)}>
-              {project.pinned ? (
-                <PinOff className="size-4 text-fg-muted" aria-hidden="true" />
-              ) : (
-                <Pin className="size-4 text-fg-muted" aria-hidden="true" />
-              )}
-              {project.pinned ? "Unpin" : "Pin"}
-            </button>
-          )}
-          {showCopy && (
-            <button role="menuitem" type="button" className={itemClass} onClick={copyLink}>
-              {copied ? (
-                <Check className="size-4 text-success" aria-hidden="true" />
-              ) : (
-                <Link2 className="size-4 text-fg-muted" aria-hidden="true" />
-              )}
-              {copied ? "Copied" : "Copy link"}
-            </button>
-          )}
-          {showEdit && project.canEdit && (
-            <Link role="menuitem" href={`${project.href}/edit`} className={itemClass} onClick={() => setOpen(false)}>
-              <Pencil className="size-4 text-fg-muted" aria-hidden="true" />
-              Edit
-            </Link>
-          )}
-          {project.canCancel && (
-            <button
-              role="menuitem"
-              type="button"
-              className={`${itemClass} text-danger`}
-              onClick={() => {
-                setOpen(false);
-                setConfirmCancel(true);
-              }}
-            >
-              <Ban className="size-4" aria-hidden="true" />
-              Cancel project
-            </button>
-          )}
-          {project.canReopen && (
-            <button role="menuitem" type="button" className={itemClass} disabled={pending} onClick={() => run(reopenProjectAction)}>
-              <RotateCcw className="size-4 text-fg-muted" aria-hidden="true" />
-              Reopen
-            </button>
-          )}
-          {pending && (
-            <p className="flex items-center gap-2 px-3 py-1.5 text-xs text-fg-muted">
-              <Loader2 className="size-3.5 animate-spin" aria-hidden="true" /> Working…
-            </p>
-          )}
-          <p role="alert" className={error ? "px-3 py-1.5 text-xs text-danger" : "sr-only"}>
-            {error}
-          </p>
-        </div>,
-          document.body
-        )}
-      <span aria-live="polite" className="sr-only">{copied ? "Link copied" : ""}</span>
-
-      <Modal
-        open={confirmCancel}
-        onClose={() => setConfirmCancel(false)}
-        title="Cancel this project?"
-        description={`“${project.name}” will be marked Cancelled. You can reopen it later.`}
-      >
-        <CancelConfirm project={project} onDone={() => setConfirmCancel(false)} />
-      </Modal>
-    </div>
+    <ActionMenu
+      label={`Actions for ${content.name}`}
+      open={open}
+      setOpen={setOpen}
+      onToggle={() => setError("")}
+      aside={<span aria-live="polite" className="sr-only">{copied ? "Brief link copied" : ""}</span>}
+    >
+      {content.briefLink && (
+        <>
+          <a
+            role="menuitem"
+            href={content.briefLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className={itemClass}
+            onClick={() => setOpen(false)}
+          >
+            <ExternalLink className="size-4 text-fg-muted" aria-hidden="true" />
+            Open brief
+            <span className="sr-only">(opens in a new tab)</span>
+          </a>
+          <CopyItem copied={copied} onClick={() => copy(content.briefLink)} label="Copy brief link" />
+        </>
+      )}
+      {content.canEdit && (
+        <Link role="menuitem" href={content.editHref} className={itemClass} onClick={() => setOpen(false)}>
+          <Pencil className="size-4 text-fg-muted" aria-hidden="true" />
+          Edit
+        </Link>
+      )}
+      <MenuError error={error} />
+    </ActionMenu>
   );
 }
 

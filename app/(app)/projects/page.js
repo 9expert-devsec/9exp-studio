@@ -79,7 +79,7 @@ async function ProjectsData({ searchParams }) {
           <Card className="flex flex-col items-center gap-3 py-12 text-center">
             <p className="text-sm text-fg-muted">No projects match these filters</p>
             <Link
-              href={`/projects${projectFiltersQuery({ view: filters.view, statuses: [], type: "" })}`}
+              href={`/projects${projectFiltersQuery({ view: filters.view, statuses: [] })}`}
               className={buttonClass("secondary")}
             >
               Clear filters

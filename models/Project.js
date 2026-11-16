@@ -5,7 +5,8 @@ import {
   PROJECT_ICON_KEYS,
   PROJECT_NAME_MAX,
   PROJECT_STATUSES,
-  PROJECT_TYPES,
+  PROJECT_TYPE,
+  PROJECT_TYPES_STORED,
 } from "../lib/projects/rules.js";
 
 const { ObjectId } = mongoose.Schema.Types;
@@ -15,11 +16,12 @@ const ProjectSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: PROJECT_NAME_MAX },
     icon: { type: String, enum: PROJECT_ICON_KEYS, default: DEFAULT_PROJECT_ICON },
-    type: { type: String, enum: PROJECT_TYPES, required: true },
-    // Date-only values, stored as UTC midnight of the picked YYYY-MM-DD.
-    startDate: { type: Date, required: true },
-    // Required (>= startDate) for campaigns; null for ongoing. Enforced in
-    // lib/projects/validate.js (the server actions), which also clears it on ongoing.
+    // Only "campaign" is written. Legacy "ongoing" docs are read as campaigns and
+    // rewritten on their next save (no migration script).
+    type: { type: String, enum: PROJECT_TYPES_STORED, default: PROJECT_TYPE },
+    // Date-only values, stored as UTC midnight of the picked YYYY-MM-DD. Both
+    // optional; when both are set, endDate >= startDate (lib/projects/validate.js).
+    startDate: { type: Date, default: null },
     endDate: { type: Date, default: null },
     description: { type: String, trim: true, maxlength: PROJECT_DESCRIPTION_MAX, default: "" },
     briefLink: { type: String, trim: true, default: "" },

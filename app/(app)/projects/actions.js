@@ -19,7 +19,7 @@ import {
   findViewableProject,
   getProjectViewer,
 } from "@/lib/projects/access";
-import { PROJECT_PIN_MAX } from "@/lib/projects/rules";
+import { PROJECT_PIN_MAX, escapeRegex } from "@/lib/projects/rules";
 import { reopenedStatus } from "@/lib/projects/status";
 import { projectStats } from "@/lib/projects/progress";
 import { parseProjectForm } from "@/lib/projects/validate";
@@ -66,8 +66,8 @@ export async function updateProjectAction(formData) {
   });
   if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
 
-  // Owner, status and cancellation fields are not editable here. endDate is null
-  // for ongoing (parseProjectForm clears it when the type switches).
+  // Owner, status and cancellation fields are not editable here. parsed.values.type
+  // is always "campaign", so a legacy "ongoing" project is normalised on this save.
   await Project.updateOne({ _id: project._id }, { $set: parsed.values }, { runValidators: true });
 
   redirect(`/projects/${project._id}`);
@@ -143,8 +143,6 @@ export async function togglePinAction(formData) {
   refresh();
   return { ok: true, pinned: true };
 }
-
-const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // Member search for the project form: ACTIVE accounts by name or email, max 8.
 // `exclude` (owner + already-selected ids) only narrows results; the save action

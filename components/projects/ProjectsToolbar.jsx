@@ -119,32 +119,10 @@ export default function ProjectsToolbar() {
               </div>
             </fieldset>
 
-            <fieldset className="mt-4">
-              <legend className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">Type</legend>
-              <div className="flex flex-col gap-1">
-                {[
-                  ["", "All"],
-                  ["ongoing", "Ongoing"],
-                  ["campaign", "Campaign"],
-                ].map(([value, label]) => (
-                  <label key={label} className="flex min-h-9 cursor-pointer items-center gap-2.5 text-sm text-fg">
-                    <input
-                      type="radio"
-                      name={`${panelId}-type`}
-                      checked={filters.type === value}
-                      onChange={() => go({ type: value })}
-                      className="size-4 accent-brand-500"
-                    />
-                    {label}
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
             <button
               type="button"
               disabled={!active}
-              onClick={() => go({ statuses: [], type: "" })}
+              onClick={() => go({ statuses: [] })}
               className={buttonClass("secondary", "mt-4 w-full")}
             >
               Clear
