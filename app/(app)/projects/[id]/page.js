@@ -56,7 +56,7 @@ async function ProjectDetail({ params }) {
               <h1 className="mt-1 break-words text-2xl font-bold leading-tight text-fg sm:text-[28px]">{project.name}</h1>
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 <Chip>{project.typeLabel}</Chip>
-                <StatusChip status={project.status} suffix="Auto" />
+                <StatusChip status={project.status} />
                 <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
                   <CalendarDays className="size-3.5" aria-hidden="true" />
                   {project.datesLong}

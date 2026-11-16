@@ -32,14 +32,13 @@ export function StatusDot({ status, className = "" }) {
   return <span aria-hidden="true" className={`inline-block size-2 shrink-0 rounded-full ${statusInfo(status).dot} ${className}`} />;
 }
 
-/** Chip with dot; `suffix` e.g. "Auto" → "In progress · Auto". */
-export function StatusChip({ status, suffix }) {
+/** Chip with dot and the status name only ("Open", "In progress", …). */
+export function StatusChip({ status }) {
   const s = statusInfo(status);
   return (
     <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.chip}`}>
       <StatusDot status={status} />
       {s.label}
-      {suffix ? ` · ${suffix}` : ""}
     </span>
   );
 }

@@ -246,7 +246,7 @@ export default function ProjectForm({ mode, initial, cancelHref }) {
       <div>
         <p className={label}>Status</p>
         {isEdit ? (
-          <StatusChip status={initial.status} suffix="Auto" />
+          <StatusChip status={initial.status} />
         ) : (
           <p className="text-sm text-fg-muted">Status is set automatically (starts as Open)</p>
         )}
