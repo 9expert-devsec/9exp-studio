@@ -7,15 +7,18 @@ import { statusInfo } from "@/lib/projects/status";
 const TILE = {
   lg: { box: "size-24 rounded-[24px]", icon: "size-11" },
   md: { box: "size-14 rounded-[16px]", icon: "size-[26px]" },
+  base: { box: "size-12 rounded-[14px]", icon: "size-6" },
   sm: { box: "size-10 rounded-[12px]", icon: "size-5" },
 };
 
 /**
  * Rounded-square icon tile. Colour is a runtime hex from the registry, so it is
  * applied with inline style (stroke = colour, background = same colour at 10%).
+ * `as` swaps the glyph but keeps the project's colour (e.g. FileText for content).
  */
-export function ProjectIconTile({ icon, size = "sm", className = "" }) {
-  const { component: Icon, color } = projectIcon(icon);
+export function ProjectIconTile({ icon, as, size = "sm", className = "" }) {
+  const { component, color } = projectIcon(icon);
+  const Icon = as ?? component;
   const t = TILE[size] ?? TILE.sm;
   return (
     <span

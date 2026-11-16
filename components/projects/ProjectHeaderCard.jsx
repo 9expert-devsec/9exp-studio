@@ -1,22 +1,28 @@
 // Project detail header card (shared by every /projects/[id]/(tabs) route via the
 // layout). No hooks: server-rendered; the ⋯ menu and Share are client islands.
+//
+// Tint: the project's icon colour, passed INLINE as the `--project-tint` custom
+// property and read by the literal `.project-tint` class (app/globals.css):
+// a soft diagonal wash + tinted border, in both themes. No progress section (the
+// Overview stat tiles carry the numbers).
 
 import Link from "next/link";
 import { CalendarDays, Pencil } from "lucide-react";
 import { buttonClass } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
+import { projectIcon } from "@/lib/projects/icons";
 import ProjectMenu from "./ProjectMenu";
 import ShareButton from "./ShareButton";
-import { Chip, ProgressBar, ProjectIconTile, StatusChip } from "./ProjectBits";
+import { Chip, ProjectIconTile, StatusChip } from "./ProjectBits";
 
 export default function ProjectHeaderCard({ project }) {
   const cancelled = project.status === "cancelled";
-  const { tasks } = project;
 
   return (
     <Card
       padded={false}
-      className={`flex flex-col gap-6 bg-linear-to-br from-accent-soft to-card p-5 sm:p-6 ${cancelled ? "opacity-80" : ""}`}
+      style={{ "--project-tint": projectIcon(project.icon).color }}
+      className={`project-tint p-5 sm:p-6 ${cancelled ? "opacity-80" : ""}`}
     >
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="flex min-w-0 gap-4 sm:gap-5">
@@ -49,16 +55,6 @@ export default function ProjectHeaderCard({ project }) {
             <ProjectMenu project={project} showOpen={false} showPin={false} showCopy={false} showEdit={false} />
           )}
         </div>
-      </div>
-
-      <div>
-        <div className="flex items-end justify-between gap-4">
-          <p className="text-sm text-fg-muted">
-            Project progress · {tasks.completed} of {tasks.total} tasks completed
-          </p>
-          <p className="text-3xl font-bold text-fg">{project.progress}%</p>
-        </div>
-        <ProgressBar value={project.progress} className="mt-3" />
       </div>
     </Card>
   );

@@ -7,12 +7,15 @@ const { ObjectId } = mongoose.Schema.Types;
 const ContentSchema = new mongoose.Schema(
   {
     project: { type: ObjectId, ref: "Project", required: true, index: true },
-    // Per-project sequence ("01", "02"…): max+1 at create, retried on a duplicate
-    // key (see createContentAction). Never reused or renumbered.
+    // Per-project sequence ("01", "02"…) from the atomic Project.contentSeq counter
+    // (see content-actions.js). Never reused or renumbered, even after deletes; the
+    // unique index below is the backstop.
     number: { type: Number, required: true, min: 1 },
     name: { type: String, required: true, trim: true, maxlength: CONTENT_NAME_MAX },
     description: { type: String, trim: true, maxlength: CONTENT_DESCRIPTION_MAX, default: "" },
     briefLink: { type: String, trim: true, default: "" },
+    // Optional, date-only (UTC midnight of the picked YYYY-MM-DD), like project dates.
+    dueDate: { type: Date, default: null },
     // Derived from Tasks in a later round (lib/projects/status.js deriveContentStatus).
     status: { type: String, enum: PROJECT_STATUSES, default: "open" },
     createdBy: { type: ObjectId, ref: "User", required: true },

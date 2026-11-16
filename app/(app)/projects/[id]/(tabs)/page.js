@@ -42,7 +42,7 @@ async function ContentTab({ params, searchParams }) {
           </div>
           <p className="mt-1 text-sm text-fg-muted">Manage briefs and tasks for each deliverable.</p>
         </div>
-        <ContentToolbar basePath={href} q={filters.q} status={filters.status} addHref={addHref} />
+        <ContentToolbar basePath={href} filters={filters} addHref={addHref} />
       </div>
 
       {total === 0 ? (

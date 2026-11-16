@@ -3,7 +3,21 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { Ban, Check, ExternalLink, Link2, Loader2, MoreHorizontal, Pencil, Pin, PinOff, RotateCcw } from "lucide-react";
+import {
+  Ban,
+  Check,
+  ExternalLink,
+  FileText,
+  Link2,
+  Loader2,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  RotateCcw,
+  Trash2,
+} from "lucide-react";
+import { deleteContentAction } from "@/app/(app)/projects/content-actions";
 import { buttonClass } from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import Modal from "@/components/ui/Modal";
@@ -295,15 +309,19 @@ export default function ProjectMenu({
 }
 
 /**
- * "⋯" menu for a content card: Open brief · Copy brief link (only with a brief) ·
- * Edit (only when content.canEdit; the update action re-checks). Renders nothing
- * when no item applies.
+ * "⋯" menu for a content item: Open · Open brief · Copy brief link (with a brief) ·
+ * Edit (content.canEdit) · divider · Delete content (content.canDelete). The server
+ * actions re-check every flag. Delete only ever runs from the confirm dialog.
+ * `then`: "list" refreshes in place after a delete; "project" redirects to the
+ * Content tab. Renders nothing when no item applies.
  */
-export function ContentMenu({ content }) {
+export function ContentMenu({ content, showOpen = true, showEdit = true, then = "list" }) {
   const [open, setOpen] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState("");
   const [copied, copy] = useCopyLink(setError);
-  if (!content.briefLink && !content.canEdit) return null;
+  const canEdit = showEdit && content.canEdit;
+  if (!showOpen && !content.briefLink && !canEdit && !content.canDelete) return null;
 
   return (
     <ActionMenu
@@ -311,8 +329,26 @@ export function ContentMenu({ content }) {
       open={open}
       setOpen={setOpen}
       onToggle={() => setError("")}
-      aside={<span aria-live="polite" className="sr-only">{copied ? "Brief link copied" : ""}</span>}
+      aside={
+        <>
+          <span aria-live="polite" className="sr-only">{copied ? "Brief link copied" : ""}</span>
+          {content.canDelete && (
+            <DeleteContentDialog
+              open={confirmDelete}
+              onClose={() => setConfirmDelete(false)}
+              content={content}
+              then={then}
+            />
+          )}
+        </>
+      }
     >
+      {showOpen && (
+        <Link role="menuitem" href={content.href} className={itemClass} onClick={() => setOpen(false)}>
+          <ExternalLink className="size-4 text-fg-muted" aria-hidden="true" />
+          Open
+        </Link>
+      )}
       {content.briefLink && (
         <>
           <a
@@ -323,21 +359,93 @@ export function ContentMenu({ content }) {
             className={itemClass}
             onClick={() => setOpen(false)}
           >
-            <ExternalLink className="size-4 text-fg-muted" aria-hidden="true" />
+            <FileText className="size-4 text-fg-muted" aria-hidden="true" />
             Open brief
             <span className="sr-only">(opens in a new tab)</span>
           </a>
           <CopyItem copied={copied} onClick={() => copy(content.briefLink)} label="Copy brief link" />
         </>
       )}
-      {content.canEdit && (
+      {canEdit && (
         <Link role="menuitem" href={content.editHref} className={itemClass} onClick={() => setOpen(false)}>
           <Pencil className="size-4 text-fg-muted" aria-hidden="true" />
           Edit
         </Link>
       )}
+      {content.canDelete && (
+        <>
+          <div role="separator" className="my-1 h-px bg-line-subtle" />
+          <button
+            role="menuitem"
+            type="button"
+            className={`${itemClass} text-danger`}
+            onClick={() => {
+              setOpen(false);
+              setConfirmDelete(true);
+            }}
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+            Delete content
+          </button>
+        </>
+      )}
       <MenuError error={error} />
     </ActionMenu>
+  );
+}
+
+/**
+ * THE confirm for deleting a content item (⋯ menus and the Edit Content page): the
+ * only UI path to deleteContentAction. Cancel has initial focus; Escape and the
+ * backdrop cancel.
+ * @param {{ open: boolean, onClose: () => void, then: "list" | "project",
+ *           content: { id: string, projectId: string, name: string } }} props
+ */
+export function DeleteContentDialog({ open, onClose, content, then = "list" }) {
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      closeOnBackdrop
+      title="Delete content?"
+      description={`“${content.name}” will be permanently deleted. This can't be undone.`}
+    >
+      <DeleteContentConfirm content={content} then={then} onDone={onClose} />
+    </Modal>
+  );
+}
+
+function DeleteContentConfirm({ content, then, onDone }) {
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const confirm = () => {
+    setError("");
+    const fd = new FormData();
+    fd.set("projectId", content.projectId);
+    fd.set("contentId", content.id);
+    fd.set("then", then);
+    startTransition(async () => {
+      // then="project": the action redirects (no result). then="list": { ok } + refresh.
+      const res = await deleteContentAction(fd);
+      if (res?.ok) onDone();
+      else if (res) setError(res.error ?? "Something went wrong.");
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onDone} className={buttonClass("secondary")} data-autofocus>
+          Cancel
+        </button>
+        <button type="button" onClick={confirm} disabled={pending} className={buttonClass("danger")}>
+          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          Delete
+        </button>
+      </div>
+    </div>
   );
 }
 

@@ -32,7 +32,13 @@ async function EditContent({ params }) {
         <h2 id="content-form-heading" className="text-xl font-bold text-fg">Edit Content</h2>
         <p className="mt-1 text-sm text-fg-muted">Update this content item in {ctx.project.name}.</p>
       </div>
-      <ContentForm mode="edit" projectId={projectId} cancelHref={`/projects/${projectId}`} initial={content} />
+      <ContentForm
+        mode="edit"
+        projectId={projectId}
+        cancelHref={`/projects/${projectId}`}
+        initial={content}
+        canDelete={content.canDelete}
+      />
     </section>
   );
 }

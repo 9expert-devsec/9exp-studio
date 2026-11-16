@@ -2,26 +2,31 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { Loader2, Plus } from "lucide-react";
+import { Loader2, Plus, Trash2 } from "lucide-react";
 import { createContentAction, updateContentAction } from "@/app/(app)/projects/content-actions";
 import { buttonClass } from "@/components/ui/Button";
 import { cardClass } from "@/components/ui/Card";
 import { CONTENT_DESCRIPTION_MAX, CONTENT_NAME_MAX } from "@/lib/projects/rules";
 import { FieldError, input, label } from "./ProjectForm";
+import { DeleteContentDialog } from "./ProjectMenu";
 
 /**
  * Shared Create/Edit Content form. Server validation (parseContentForm) is
  * authoritative; its field errors render under each field. On success the action
  * redirects to the project's Content tab. No status field (status is automatic).
+ * Edit + canDelete: a "Delete content" button bottom-left opens the shared confirm
+ * (DeleteContentDialog), which redirects to the Content tab after deleting.
  *
- * @param {{ mode: "create" | "edit", projectId: string, cancelHref: string,
- *           initial: { id?: string, name: string, description: string, briefLink: string } }} props
+ * @param {{ mode: "create" | "edit", projectId: string, cancelHref: string, canDelete?: boolean,
+ *           initial: { id?: string, name: string, description: string, briefLink: string, dueDate?: string } }} props
  */
-export default function ContentForm({ mode, projectId, initial, cancelHref }) {
+export default function ContentForm({ mode, projectId, initial, cancelHref, canDelete = false }) {
   const isEdit = mode === "edit";
   const [name, setName] = useState(initial.name ?? "");
   const [description, setDescription] = useState(initial.description ?? "");
   const [briefLink, setBriefLink] = useState(initial.briefLink ?? "");
+  const [dueDate, setDueDate] = useState(initial.dueDate ?? "");
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -35,6 +40,7 @@ export default function ContentForm({ mode, projectId, initial, cancelHref }) {
     fd.set("name", name);
     fd.set("description", description);
     fd.set("briefLink", briefLink);
+    fd.set("dueDate", dueDate);
 
     startTransition(async () => {
       // On success the action redirects (navigation), so a result means failure.
@@ -113,15 +119,47 @@ export default function ContentForm({ mode, projectId, initial, cancelHref }) {
         <FieldError id={errId("briefLink")} error={err("briefLink")} />
       </div>
 
+      <div className="sm:max-w-xs">
+        <label htmlFor="content-due" className={label}>
+          Due date <span className="font-normal text-fg-muted">(optional)</span>
+        </label>
+        <input
+          id="content-due"
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className={input}
+          {...aria("dueDate")}
+        />
+        <FieldError id={errId("dueDate")} error={err("dueDate")} />
+      </div>
+
       <p role="alert" className={formError ? "text-sm text-danger" : "sr-only"}>{formError}</p>
 
-      <div className="flex flex-col-reverse gap-2 border-t border-line-subtle pt-5 sm:flex-row sm:justify-end">
-        <Link href={cancelHref} className={buttonClass("secondary")}>Cancel</Link>
-        <button type="submit" disabled={pending} className={buttonClass("primary")}>
-          {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : !isEdit && <Plus className="size-4" aria-hidden="true" />}
-          {isEdit ? "Save changes" : "Create Content"}
-        </button>
+      <div className="flex flex-col-reverse gap-2 border-t border-line-subtle pt-5 sm:flex-row sm:items-center">
+        {isEdit && canDelete && (
+          <button type="button" onClick={() => setConfirmDelete(true)} className={buttonClass("danger-outline", "sm:mr-auto")}>
+            <Trash2 className="size-4" aria-hidden="true" />
+            Delete content
+          </button>
+        )}
+        <div className="flex flex-col-reverse gap-2 sm:ml-auto sm:flex-row">
+          <Link href={cancelHref} className={buttonClass("secondary")}>Cancel</Link>
+          <button type="submit" disabled={pending} className={buttonClass("primary")}>
+            {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : !isEdit && <Plus className="size-4" aria-hidden="true" />}
+            {isEdit ? "Save changes" : "Create Content"}
+          </button>
+        </div>
       </div>
+
+      {isEdit && canDelete && (
+        <DeleteContentDialog
+          open={confirmDelete}
+          onClose={() => setConfirmDelete(false)}
+          content={{ id: initial.id, projectId, name: initial.name }}
+          then="project"
+        />
+      )}
     </form>
   );
 }

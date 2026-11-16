@@ -4,12 +4,11 @@ export function FormSkeleton() {
   return <div className="mx-auto h-[720px] w-full max-w-[880px] animate-pulse rounded-[24px] bg-track" aria-hidden="true" />;
 }
 
-/** Breadcrumb + header card + tabs (the (tabs) layout). */
+/** Header card + tabs (the (tabs) layout; the @crumbs slot has its own fallback). */
 export function ProjectHeaderSkeleton() {
   return (
     <div className="flex animate-pulse flex-col gap-6" aria-hidden="true">
-      <span className="h-3 w-48 rounded bg-track" />
-      <span className="h-56 rounded-[24px] bg-track" />
+      <span className="h-36 rounded-[24px] bg-track" />
       <span className="h-11 w-72 rounded bg-track" />
     </div>
   );

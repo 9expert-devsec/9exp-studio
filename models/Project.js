@@ -34,6 +34,10 @@ const ProjectSchema = new mongoose.Schema(
     cancelledAt: { type: Date, default: null },
     cancelledBy: { type: ObjectId, ref: "User", default: null },
     createdBy: { type: ObjectId, ref: "User", required: true },
+    // Last content number handed out (atomic $inc in content-actions.js). No default
+    // on purpose: when missing it is initialised from the project's current max
+    // content number first, so numbers are never reused.
+    contentSeq: { type: Number },
   },
   { timestamps: true, collection: "projects" }
 );

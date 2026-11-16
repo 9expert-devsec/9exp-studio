@@ -6,7 +6,8 @@ import { X } from "lucide-react";
 // Accessible modal on the native <dialog> element: showModal() gives a focus trap,
 // inert background, Escape-to-close and focus return for free.
 // Children mount only while open, so form state resets each time it opens.
-// Clicking the backdrop does NOT close it (protects typed input and one-time passwords).
+// Clicking the backdrop does NOT close it by default (protects typed input and
+// one-time passwords). Confirm dialogs with no input pass `closeOnBackdrop`.
 //
 // Initial focus (showModal() alone would focus the ✕ close button): an element marked
 // `data-autofocus` (e.g. the safe action of a confirm dialog), else the first real
@@ -14,7 +15,7 @@ import { X } from "lucide-react";
 const FIRST_FIELD =
   "input:not([type=hidden]):not([type=file]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])";
 
-export default function Modal({ open, onClose, title, description, children }) {
+export default function Modal({ open, onClose, title, description, closeOnBackdrop = false, children }) {
   const ref = useRef(null);
   const titleId = useId();
   const descId = useId();
@@ -34,6 +35,9 @@ export default function Modal({ open, onClose, title, description, children }) {
     <dialog
       ref={ref}
       onClose={onClose}
+      // The dialog box is fully covered by its padded child, so a click whose target
+      // is the <dialog> itself landed on the backdrop.
+      onClick={closeOnBackdrop ? (e) => e.target === e.currentTarget && onClose?.() : undefined}
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
       className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-[24px] border border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50"
