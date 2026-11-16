@@ -29,7 +29,8 @@ const ProjectSchema = new mongoose.Schema(
     owner: { type: ObjectId, ref: "User", required: true },
     // Excludes the owner (deduped server-side).
     members: { type: [{ type: ObjectId, ref: "User" }], default: [] },
-    // Auto by design (see lib/projects/status.js). This round: open, or cancelled by hand.
+    // Derived from tasks and persisted by recomputeRollups() (lib/projects/progress.js);
+    // "cancelled" is manual and never overwritten by a recompute.
     status: { type: String, enum: PROJECT_STATUSES, default: "open" },
     cancelledAt: { type: Date, default: null },
     cancelledBy: { type: ObjectId, ref: "User", default: null },

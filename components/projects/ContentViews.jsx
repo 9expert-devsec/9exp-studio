@@ -12,19 +12,19 @@ import {
   Clock,
   FileText,
   ListChecks,
-  MoreHorizontal,
   Pencil,
   Plus,
 } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
 import Card, { cardClass } from "@/components/ui/Card";
-import IconButton from "@/components/ui/IconButton";
 import { taskFiltersQuery } from "@/lib/projects/filters";
-import { contentNumberLabel, formatShortDate } from "@/lib/projects/format";
+import { formatShortDate } from "@/lib/projects/format";
 import { statusInfo } from "@/lib/projects/status";
+import { getTaskType } from "@/lib/tasks/types";
 import ContentToolbar from "./ContentToolbar";
-import { ContentMenu } from "./ProjectMenu";
+import CreateTaskDrawer from "./CreateTaskDrawer";
+import { ContentMenu, TaskMenu } from "./ProjectMenu";
 import { ProgressBar, ProjectIconTile, StatusChip } from "./ProjectBits";
 
 /** "{completed}/{total} Tasks" · status label · big % · accent bar (card + detail). */
@@ -114,53 +114,66 @@ function TaskPerson({ label, person }) {
   );
 }
 
-/** Placeholder ⋯ for tasks until the Tasks round adds actions. */
-function TaskMenuPlaceholder({ task }) {
+/** Muted type indicator (catalog icon + label), so mixed types are readable. */
+function TaskTypeTag({ type, label }) {
+  const Icon = getTaskType(type)?.icon ?? ListChecks;
   return (
-    <IconButton
-      icon={MoreHorizontal}
-      label={`Actions for TASK ${contentNumberLabel(task.number)} (coming soon)`}
-      disabled
-      title="Coming soon"
-    />
+    <span className="inline-flex min-w-0 items-center gap-1 text-[11px] text-fg-muted">
+      <Icon className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="truncate">{label}</span>
+    </span>
   );
 }
 
+/** Status chip: the catalog's Thai label, coloured by its group. */
+const TaskStatusChip = ({ task }) => <StatusChip status={task.group} label={task.statusLabel} />;
+
+const dueLabel = (task) => (task.dueDate ? formatShortDate(task.dueDate) : "No due date");
+
 /**
- * Task card: the content card's "Recent Tasks" row, and (withFooter) the content
- * detail Cards view, which adds a footer strip: due date left, ⋯ right. Built now,
- * rendered only when tasks exist (Tasks round). Shape: lib/projects/progress.js.
+ * Task card: the content card's "Recent Tasks" (compact: due date in the body, no
+ * menu) and, withFooter, the content detail Cards view, whose footer strip carries
+ * the due date (left) and the task ⋯ menu (right). Shape: queries.js taskView().
  */
 export function TaskCard({ task, withFooter = false }) {
   return (
-    <article className="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-line bg-card">
-      <TaskCardBody task={task} />
+    <article
+      aria-label={`TASK ${task.numberLabel}: ${task.title}`}
+      className="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-line bg-card"
+    >
+      <TaskCardBody task={task} showDue={!withFooter} />
       {withFooter && (
-        <div className="flex items-center justify-between gap-2 border-t border-line-subtle bg-card-inset px-3.5 py-2">
-          <span className="inline-flex items-center gap-1.5 text-xs text-fg-muted">
-            <CalendarDays className="size-3.5" aria-hidden="true" />
-            {task.dueDate ? formatShortDate(task.dueDate) : "No due date"}
+        <div className="flex min-h-11 items-center justify-between gap-2 border-t border-line-subtle bg-card-inset px-3.5 py-1.5">
+          <span className={`inline-flex items-center gap-1.5 text-xs ${task.dueDate ? "text-fg" : "text-fg-muted"}`}>
+            <CalendarDays className="size-3.5 text-fg-muted" aria-hidden="true" />
+            {dueLabel(task)}
           </span>
-          <TaskMenuPlaceholder task={task} />
+          <TaskMenu task={task} />
         </div>
       )}
     </article>
   );
 }
 
-function TaskCardBody({ task }) {
+function TaskCardBody({ task, showDue }) {
   return (
-    <div className="flex min-w-0 flex-col gap-3 p-3.5">
-      <div className="flex items-center gap-2">
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
-          Task {contentNumberLabel(task.number)}
+    <div className="flex min-w-0 flex-1 flex-col gap-3 p-3.5">
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-fg-muted">
+          Task {task.numberLabel}
         </span>
-        {task.dueDate && <span className="text-[10px] text-fg-muted">Due {formatShortDate(task.dueDate)}</span>}
+        <TaskTypeTag type={task.type} label={task.typeLabel} />
         <span className="ml-auto shrink-0">
-          <StatusChip status={task.status} />
+          <TaskStatusChip task={task} />
         </span>
       </div>
-      <h4 className="truncate text-sm font-semibold text-fg">{task.title}</h4>
+      <h4 className="line-clamp-2 break-words text-sm font-semibold text-fg">{task.title}</h4>
+      {(showDue || task.assetStatusLabel) && (
+        <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
+          {showDue && <span>{task.dueDate ? `Due ${dueLabel(task)}` : "No due date"}</span>}
+          {task.assetStatusLabel && <span>Asset · {task.assetStatusLabel}</span>}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-3 border-t border-line-subtle pt-3">
         <TaskPerson label="Created by" person={task.createdBy} />
         <TaskPerson label="Assigned to" person={task.assignee} />
@@ -173,8 +186,8 @@ const th = "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide te
 const td = "px-4 py-3 align-middle text-sm";
 
 /**
- * Content detail Table view (rendered only when tasks exist). The Due date header
- * links to the opposite sort. Row checkboxes are visual only (bulk actions later).
+ * Content detail Table view. The Due date header links to the opposite sort. Row
+ * checkboxes are inert (bulk actions later).
  */
 export function TasksTable({ tasks, sort, sortHref }) {
   const desc = sort === "due_desc";
@@ -203,14 +216,17 @@ export function TasksTable({ tasks, sort, sortHref }) {
         </thead>
         <tbody className="divide-y divide-line-subtle">
           {tasks.map((t) => {
-            const idLabel = `TASK ${contentNumberLabel(t.number)}`;
+            const idLabel = `TASK ${t.numberLabel}`;
             return (
               <tr key={t.id}>
                 <td className={td}>
                   <input type="checkbox" aria-label={`Select ${idLabel}`} className="size-4 accent-brand-500" />
                 </td>
-                <td className={`${td} whitespace-nowrap text-xs font-semibold uppercase tracking-wider text-fg-muted`}>{idLabel}</td>
-                <td className={`${td} max-w-xs truncate font-semibold text-fg`}>{t.title}</td>
+                <td className={`${td} whitespace-nowrap`}>
+                  <span className="block text-xs font-semibold uppercase tracking-wider text-fg-muted">{idLabel}</span>
+                  <TaskTypeTag type={t.type} label={t.typeLabel} />
+                </td>
+                <td className={`${td} max-w-xs truncate font-semibold text-fg`} title={t.title}>{t.title}</td>
                 <td className={td}>
                   {t.assignee ? (
                     <span className="flex items-center gap-2">
@@ -223,10 +239,12 @@ export function TasksTable({ tasks, sort, sortHref }) {
                 </td>
                 <td className={`${td} whitespace-nowrap text-fg-muted`}>{t.dueDate ? formatShortDate(t.dueDate) : "—"}</td>
                 <td className={td}>
-                  <StatusChip status={t.status} />
+                  <TaskStatusChip task={t} />
                 </td>
                 <td className={`${td} text-right`}>
-                  <TaskMenuPlaceholder task={t} />
+                  <span className="inline-flex justify-end">
+                    <TaskMenu task={t} />
+                  </span>
                 </td>
               </tr>
             );
@@ -322,29 +340,51 @@ export function ContentSummaryCard({ content }) {
   );
 }
 
+const ADD_TASK_ID = "add-task-trigger";
+
 /**
- * Content detail Tasks section. Toolbar state lives in the URL (filters); tasks are
- * empty until the Tasks round, so both layouts render only when data exists.
+ * Content detail Tasks section. Toolbar state lives in the URL (filters, already
+ * applied server-side by loadContentDetail). "+ Add task" (when the viewer may
+ * create at least one type) opens the Create Task drawer via ?newTask=1.
+ * Summary line counts ALL tasks (cancelled included).
  */
 export function TasksSection({ content, filters }) {
   const { stats, tasks } = content;
-  const sortHref = `${content.href}${taskFiltersQuery({ ...filters, sort: filters.sort === "due_desc" ? "due_asc" : "due_desc" })}`;
+  const query = (next) => `${content.href}${taskFiltersQuery({ ...filters, newTask: false, ...next })}`;
+  const sortHref = query({ sort: filters.sort === "due_desc" ? "due_asc" : "due_desc" });
+  const canAdd = content.taskTypes.length > 0;
+  const addHref = canAdd ? query({ newTask: true }) : null;
+  const n = stats.all;
+
   return (
     <section aria-labelledby="tasks-heading" className="flex flex-col gap-4">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <h2 id="tasks-heading" className="text-xl text-fg">Tasks</h2>
           <p className="mt-1 text-sm text-fg-muted">
-            {stats.total} {stats.total === 1 ? "task" : "tasks"} · {stats.inProgress} in progress · {stats.open} open
+            {n} {n === 1 ? "task" : "tasks"} · {stats.inProgress} in progress · {stats.open} open
           </p>
         </div>
-        <ContentToolbar kind="tasks" basePath={content.href} filters={filters} addDisabled />
+        <ContentToolbar kind="tasks" basePath={content.href} filters={filters} addHref={addHref} addId={ADD_TASK_ID} />
       </div>
 
-      {tasks.length === 0 ? (
-        <div className="flex flex-col items-center gap-2 rounded-[16px] bg-card-inset py-12 text-center">
+      {n === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-[16px] bg-card-inset py-12 text-center">
           <ListChecks className="size-6 text-fg-muted" aria-hidden="true" />
           <p className="text-sm text-fg-muted">No tasks yet</p>
+          {addHref && (
+            <Link href={addHref} scroll={false} className={buttonClass("primary")}>
+              <Plus className="size-4" aria-hidden="true" />
+              Add task
+            </Link>
+          )}
+        </div>
+      ) : tasks.length === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-[16px] bg-card-inset py-12 text-center">
+          <p className="text-sm text-fg-muted">No tasks match these filters</p>
+          <Link href={query({ q: "", status: "" })} scroll={false} replace className={buttonClass("secondary")}>
+            Clear filters
+          </Link>
         </div>
       ) : filters.view === "table" ? (
         <TasksTable tasks={tasks} sort={filters.sort} sortHref={sortHref} />
@@ -356,7 +396,24 @@ export function TasksSection({ content, filters }) {
         </div>
       )}
 
-      {tasks.length > 0 && <p className="text-sm text-fg-muted">Showing all {tasks.length} tasks</p>}
+      {tasks.length > 0 && (
+        <p className="text-sm text-fg-muted">
+          {tasks.length === n ? `Showing all ${n} tasks` : `Showing ${tasks.length} of ${n} tasks`}
+        </p>
+      )}
+
+      {canAdd && (
+        <CreateTaskDrawer
+          open={filters.newTask}
+          projectId={content.projectId}
+          contentId={content.id}
+          projectName={content.projectName}
+          contentName={content.name}
+          allowedTypes={content.taskTypes}
+          closeHref={query({})}
+          returnFocusId={ADD_TASK_ID}
+        />
+      )}
     </section>
   );
 }

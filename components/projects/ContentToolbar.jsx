@@ -2,7 +2,8 @@
 
 // URL-driven list toolbar, shared by the Content tab (kind="content": search ·
 // status · "+ Add content") and the content detail Tasks section (kind="tasks":
-// search · status · "Due date ↑/↓" sort · Cards|Table view · "+ Add task").
+// search · status GROUP · "Due date ↑/↓" sort · Cards|Table view · "+ Add task",
+// which opens the Create Task drawer via ?newTask=1).
 // `filters` come from the server page, parsed from searchParams on every render;
 // nothing is mirrored into state. Typing replaces ?q= after ~300ms (the input is
 // uncontrolled and re-synced when the URL changes from elsewhere, e.g. "Clear
@@ -32,17 +33,20 @@ const segOff = `${segBase} text-fg-muted hover:text-fg`;
 /**
  * @param {{ kind?: "content" | "tasks", basePath: string,
  *           filters: { q: string, status: string, sort?: string, view?: string },
- *           addHref?: string | null, addLabel?: string, addDisabled?: boolean }} props
+ *           addHref?: string | null, addLabel?: string, addDisabled?: boolean, addId?: string }} props
  *   addDisabled: render the add button disabled ("Coming soon").
+ *   addId: id on the add link (the Create Task drawer returns focus to it). In
+ *   tasks mode the add link opens the drawer in place (no scroll to top).
  */
-export default function ContentToolbar({ kind = "content", basePath, filters, addHref, addLabel, addDisabled = false }) {
+export default function ContentToolbar({ kind = "content", basePath, filters, addHref, addLabel, addDisabled = false, addId }) {
   const router = useRouter();
   const inputRef = useRef(null);
   const timer = useRef(null);
   const [shownStatus, setShownStatus] = useOptimistic(filters.status);
   const [, startTransition] = useTransition();
   const toQuery = QUERY[kind] ?? contentFiltersQuery;
-  const hrefFor = (next) => `${basePath}${toQuery({ ...filters, ...next })}`;
+  // The toolbar never carries the drawer flag (?newTask) into its own links.
+  const hrefFor = (next) => `${basePath}${toQuery({ ...filters, newTask: false, ...next })}`;
   const replace = (next) => router.replace(hrefFor(next), { scroll: false });
   const isTasks = kind === "tasks";
   const q = filters.q;
@@ -149,7 +153,7 @@ export default function ContentToolbar({ kind = "content", basePath, filters, ad
         </button>
       ) : (
         addHref && (
-          <Link href={addHref} className={buttonClass("primary")}>
+          <Link id={addId} href={addHref} scroll={!isTasks} className={buttonClass("primary")}>
             <Plus className="size-4" aria-hidden="true" />
             {label}
           </Link>

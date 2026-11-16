@@ -144,9 +144,34 @@
     var(--font-google-sans), sans-serif;
 }
 
+/*
+ * Native form UI follows the theme class on <html> (app/layout.js: `dark` by
+ * default, removed for a stored "light"). Without this, a native <select>'s
+ * option list stayed light in dark mode with near-invisible light text.
+ */
+:root {
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
+}
+
 @layer base {
   body {
     font-family: var(--font-sans);
+  }
+
+  /* Explicit theme colours for every native select and its option list. Base
+     layer, so a select's own background / text utilities still win; the option list
+     (not styleable by those utilities) always gets the card surface. */
+  select {
+    background-color: var(--ds-card);
+    color: var(--ds-fg);
+  }
+  option,
+  optgroup {
+    background-color: var(--ds-card);
+    color: var(--ds-fg);
   }
 
   /* Headings use LINE Seed Sans TH, locked at bold (as in genesis-lab). */

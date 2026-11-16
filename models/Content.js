@@ -16,9 +16,13 @@ const ContentSchema = new mongoose.Schema(
     briefLink: { type: String, trim: true, default: "" },
     // Optional, date-only (UTC midnight of the picked YYYY-MM-DD), like project dates.
     dueDate: { type: Date, default: null },
-    // Derived from Tasks in a later round (lib/projects/status.js deriveContentStatus).
+    // Derived from its tasks (lib/projects/status.js deriveContentStatus) and
+    // persisted by recomputeRollups() after every task write.
     status: { type: String, enum: PROJECT_STATUSES, default: "open" },
     createdBy: { type: ObjectId, ref: "User", required: true },
+    // Last task number handed out (atomic $inc, lib/projects/sequence.js). No
+    // default on purpose: when missing it is initialised from the current max.
+    taskSeq: { type: Number },
   },
   { timestamps: true, collection: "contents" }
 );

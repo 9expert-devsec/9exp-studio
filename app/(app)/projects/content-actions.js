@@ -18,9 +18,11 @@ import {
   findViewableProject,
   getProjectViewer,
 } from "@/lib/projects/access";
+import { recomputeRollups } from "@/lib/projects/progress";
+import { CONTENT_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseContentForm } from "@/lib/projects/validate";
 import Content from "@/models/Content";
-import Project from "@/models/Project";
+import Task from "@/models/Task";
 
 const fail = (error, fieldErrors) => ({ ok: false, error, ...(fieldErrors ? { fieldErrors } : {}) });
 const str = (v) => (typeof v === "string" ? v : "");
@@ -30,38 +32,8 @@ const CONTENT_NOT_FOUND = "That content item no longer exists.";
 const PROJECT_CANCELLED = "This project is cancelled. Reopen it to change its content.";
 const NOT_ALLOWED = "Only the project owner, the item's creator or an admin can do this.";
 const CHECK_FIELDS = "Please fix the highlighted fields.";
-const NUMBER_ATTEMPTS = 3;
 
-// Counter writes must not bump the project's updatedAt (it orders the projects list).
-const NO_TIMESTAMPS = { timestamps: false };
-
-/**
- * Make sure Project.contentSeq exists. Projects from before the counter get it set
- * ONCE to their current max content number; the update is conditional on the field
- * still being missing, so concurrent initialisers can't overwrite a live counter.
- * Called before every create AND before every delete, so a legacy project's
- * highest number is recorded before it can be deleted (never reused).
- */
-async function ensureContentSeq(projectId) {
-  if (await Project.exists({ _id: projectId, contentSeq: { $exists: true } })) return;
-  const last = await Content.findOne({ project: projectId }).sort({ number: -1 }).select("number").lean();
-  await Project.updateOne(
-    { _id: projectId, contentSeq: { $exists: false } },
-    { $set: { contentSeq: last?.number ?? 0 } },
-    NO_TIMESTAMPS
-  );
-}
-
-/** Atomically hand out the next number for this project. */
-async function nextContentNumber(projectId) {
-  await ensureContentSeq(projectId);
-  const updated = await Project.findOneAndUpdate(
-    { _id: projectId },
-    { $inc: { contentSeq: 1 } },
-    { returnDocument: "after", projection: { contentSeq: 1 }, ...NO_TIMESTAMPS }
-  ).lean();
-  return updated?.contentSeq ?? null;
-}
+// Numbering: Project.contentSeq, atomic and never reused (lib/projects/sequence.js).
 
 export async function createContentAction(formData) {
   const viewer = await getProjectViewer();
@@ -74,25 +46,13 @@ export async function createContentAction(formData) {
   const parsed = parseContentForm(formData);
   if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
 
-  // The counter makes duplicates impossible in normal operation; the unique
-  // {project, number} index is the backstop (E11000 → take the next number).
-  let created = false;
-  for (let attempt = 0; attempt < NUMBER_ATTEMPTS && !created; attempt++) {
-    const number = await nextContentNumber(project._id);
-    if (!number) return fail(PROJECT_NOT_FOUND);
-    try {
-      await Content.create({
-        ...parsed.values,
-        project: project._id,
-        number,
-        status: "open",
-        createdBy: viewer.id,
-      });
-      created = true;
-    } catch (err) {
-      if (err?.code !== 11000) throw err;
-    }
-  }
+  // A new item has no tasks, so its derived status is "open".
+  const created = await createNumbered(CONTENT_SEQ, project._id, {
+    ...parsed.values,
+    project: project._id,
+    status: "open",
+    createdBy: viewer.id,
+  });
   if (!created) return fail("Could not number this item — please try again.");
 
   redirect(`/projects/${project._id}`);
@@ -114,7 +74,7 @@ export async function updateContentAction(formData) {
   const parsed = parseContentForm(formData);
   if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
 
-  // Scoped to the project again; number, status and createdBy are never edited here.
+  // Scoped to the project again; number, status, taskSeq and createdBy are never edited here.
   await Content.updateOne(
     { _id: content._id, project: project._id },
     { $set: parsed.values },
@@ -143,11 +103,14 @@ export async function deleteContentAction(formData) {
   }
 
   // Record the counter first so this item's number can never be handed out again.
-  await ensureContentSeq(project._id);
+  await ensureSeq(CONTENT_SEQ, project._id);
 
-  // TODO(tasks round): when Tasks exist, delete this content's tasks here too
-  // (cascade, ideally in a transaction with the content delete below).
+  // Cascade: its tasks first, then the item, then re-derive the project's status.
+  // (Not a transaction: a failure between the two deletes leaves an item with
+  // fewer tasks, never orphaned tasks.)
+  await Task.deleteMany({ content: content._id, project: project._id });
   await Content.deleteOne({ _id: content._id, project: project._id });
+  await recomputeRollups({ projectId: project._id });
 
   if (str(formData.get("then")) === "project") redirect(`/projects/${project._id}`);
   refresh();

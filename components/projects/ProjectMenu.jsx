@@ -4,6 +4,7 @@ import { useEffect, useId, useLayoutEffect, useRef, useState, useTransition } fr
 import { createPortal } from "react-dom";
 import Link from "next/link";
 import {
+  ArrowRightLeft,
   Ban,
   Check,
   ExternalLink,
@@ -18,6 +19,9 @@ import {
   Trash2,
 } from "lucide-react";
 import { deleteContentAction } from "@/app/(app)/projects/content-actions";
+import { changeTaskStatusAction, deleteTaskAction } from "@/app/(app)/projects/task-actions";
+import { assetStatuses, taskStatuses } from "@/lib/tasks/types";
+import { StatusDot } from "./ProjectBits";
 import { buttonClass } from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import Modal from "@/components/ui/Modal";
@@ -430,6 +434,184 @@ function DeleteContentConfirm({ content, then, onDone }) {
       const res = await deleteContentAction(fd);
       if (res?.ok) onDone();
       else if (res) setError(res.error ?? "Something went wrong.");
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onDone} className={buttonClass("secondary")} data-autofocus>
+          Cancel
+        </button>
+        <button type="button" onClick={confirm} disabled={pending} className={buttonClass("danger")}>
+          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * "⋯" menu for a task (Cards footer and Table rows): Change status
+ * (task.canChangeStatus) · Delete task (task.canDelete). Both are re-checked by the
+ * server actions, which also recompute the content/project roll-ups and refresh in
+ * place. Renders nothing when neither applies.
+ */
+export function TaskMenu({ task }) {
+  const [open, setOpen] = useState(false);
+  const [dialog, setDialog] = useState(null);
+  if (!task.canChangeStatus && !task.canDelete) return null;
+  const close = () => setDialog(null);
+  const idLabel = `TASK ${task.numberLabel}`;
+
+  return (
+    <ActionMenu
+      label={`Actions for ${idLabel}`}
+      open={open}
+      setOpen={setOpen}
+      aside={
+        <>
+          {task.canChangeStatus && (
+            <Modal open={dialog === "status"} onClose={close} title="Change status" description={`${idLabel} · ${task.title}`}>
+              <ChangeTaskStatusForm task={task} onDone={close} />
+            </Modal>
+          )}
+          {task.canDelete && (
+            <Modal
+              open={dialog === "delete"}
+              onClose={close}
+              closeOnBackdrop
+              title="Delete task?"
+              description={`“${task.title}” will be permanently deleted. This can't be undone.`}
+            >
+              <DeleteTaskConfirm task={task} onDone={close} />
+            </Modal>
+          )}
+        </>
+      }
+    >
+      {task.canChangeStatus && (
+        <button
+          role="menuitem"
+          type="button"
+          className={itemClass}
+          onClick={() => {
+            setOpen(false);
+            setDialog("status");
+          }}
+        >
+          <ArrowRightLeft className="size-4 text-fg-muted" aria-hidden="true" />
+          Change status
+        </button>
+      )}
+      {task.canDelete && (
+        <>
+          {task.canChangeStatus && <div role="separator" className="my-1 h-px bg-line-subtle" />}
+          <button
+            role="menuitem"
+            type="button"
+            className={`${itemClass} text-danger`}
+            onClick={() => {
+              setOpen(false);
+              setDialog("delete");
+            }}
+          >
+            <Trash2 className="size-4" aria-hidden="true" />
+            Delete task
+          </button>
+        </>
+      )}
+    </ActionMenu>
+  );
+}
+
+const optionRow =
+  "flex min-h-11 cursor-pointer items-center gap-3 rounded-[12px] border border-line px-3.5 text-sm text-fg transition-colors hover:bg-card-inset has-[:checked]:border-brand-500 has-[:checked]:bg-accent-soft has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand-500";
+
+/** One radio list (Thai labels from the catalog), the current value checked. */
+function StatusRadios({ legend, name, options, value, onChange }) {
+  return (
+    <fieldset className="flex flex-col gap-2">
+      <legend className="mb-2 text-sm font-semibold text-fg">{legend}</legend>
+      {options.map((o) => (
+        <label key={o.key} className={optionRow}>
+          <input
+            type="radio"
+            name={name}
+            value={o.key}
+            checked={value === o.key}
+            onChange={() => onChange(o.key)}
+            data-autofocus={value === o.key ? true : undefined}
+            className="size-4 accent-brand-500"
+          />
+          <span className="flex-1">{o.label}</span>
+          {o.group && <StatusDot status={o.group} />}
+        </label>
+      ))}
+    </fieldset>
+  );
+}
+
+function ChangeTaskStatusForm({ task, onDone }) {
+  const statuses = taskStatuses(task.type);
+  const assets = assetStatuses(task.type);
+  const [status, setStatus] = useState(task.status);
+  const [asset, setAsset] = useState(task.assetStatus ?? assets[0]?.key ?? "");
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const onSubmit = (e) => {
+    e.preventDefault();
+    setError("");
+    const fd = new FormData();
+    fd.set("projectId", task.projectId);
+    fd.set("contentId", task.contentId);
+    fd.set("taskId", task.id);
+    fd.set("status", status);
+    if (assets.length) fd.set("assetStatus", asset);
+    startTransition(async () => {
+      const res = await changeTaskStatusAction(fd);
+      if (res?.ok) onDone();
+      else setError(res?.error ?? "Something went wrong.");
+    });
+  };
+
+  return (
+    <form onSubmit={onSubmit} className="flex flex-col gap-5">
+      <StatusRadios legend="Status" name="status" options={statuses} value={status} onChange={setStatus} />
+      {assets.length > 0 && (
+        <StatusRadios legend="Status Asset" name="assetStatus" options={assets} value={asset} onChange={setAsset} />
+      )}
+      <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onDone} className={buttonClass("secondary")}>
+          Cancel
+        </button>
+        <button type="submit" disabled={pending} className={buttonClass("primary")}>
+          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          Save
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function DeleteTaskConfirm({ task, onDone }) {
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const confirm = () => {
+    setError("");
+    const fd = new FormData();
+    fd.set("projectId", task.projectId);
+    fd.set("contentId", task.contentId);
+    fd.set("taskId", task.id);
+    startTransition(async () => {
+      const res = await deleteTaskAction(fd);
+      if (res?.ok) onDone();
+      else setError(res?.error ?? "Something went wrong.");
     });
   };
 

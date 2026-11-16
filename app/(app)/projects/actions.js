@@ -21,7 +21,7 @@ import {
 } from "@/lib/projects/access";
 import { PROJECT_PIN_MAX, escapeRegex } from "@/lib/projects/rules";
 import { reopenedStatus } from "@/lib/projects/status";
-import { projectStats } from "@/lib/projects/progress";
+import { projectTaskCounts } from "@/lib/projects/progress";
 import { parseProjectForm } from "@/lib/projects/validate";
 import Project from "@/models/Project";
 import ProjectPin from "@/models/ProjectPin";
@@ -106,7 +106,7 @@ export async function reopenProjectAction(formData) {
     { _id: project._id, status: "cancelled" },
     {
       $set: {
-        status: reopenedStatus(project, projectStats(project).tasks),
+        status: reopenedStatus(await projectTaskCounts(project._id)),
         cancelledAt: null,
         cancelledBy: null,
       },

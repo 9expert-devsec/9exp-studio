@@ -35,13 +35,16 @@ export function StatusDot({ status, className = "" }) {
   return <span aria-hidden="true" className={`inline-block size-2 shrink-0 rounded-full ${statusInfo(status).dot} ${className}`} />;
 }
 
-/** Chip with dot and the status name only ("Open", "In progress", …). */
-export function StatusChip({ status }) {
+/**
+ * Chip with dot and the status name ("Open", "In progress", …). Tasks pass their
+ * status GROUP as `status` (colour) and the catalog's Thai label as `label`.
+ */
+export function StatusChip({ status, label }) {
   const s = statusInfo(status);
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium ${s.chip}`}>
+    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-medium ${s.chip}`}>
       <StatusDot status={status} />
-      {s.label}
+      {label ?? s.label}
     </span>
   );
 }
