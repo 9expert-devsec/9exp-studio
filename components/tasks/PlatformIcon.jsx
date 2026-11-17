@@ -6,6 +6,7 @@
 // meaning. No hooks: renders from server and client components.
 
 import { FaCircleQuestion, FaFacebook, FaGlobe, FaInstagram, FaLine, FaTiktok, FaXTwitter, FaYoutube } from "react-icons/fa6";
+import { SiShopee } from "react-icons/si";
 
 const PLATFORM_ICONS = {
   youtube: { Icon: FaYoutube, color: "#FF0000" },
@@ -14,6 +15,7 @@ const PLATFORM_ICONS = {
   instagram: { Icon: FaInstagram, color: "#E4405F" },
   line: { Icon: FaLine, color: "#06C755" },
   x: { Icon: FaXTwitter, className: "text-fg" },
+  shopee: { Icon: SiShopee, color: "#EE4D2D" }, // Simple Icons: FA6 has no Shopee logo
   website: { Icon: FaGlobe, className: "text-fg-muted" },
   other: { Icon: FaCircleQuestion, className: "text-fg-muted" },
 };
