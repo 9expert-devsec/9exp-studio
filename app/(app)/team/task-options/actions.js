@@ -8,6 +8,7 @@
 
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
+import { syncMsdbRefs } from "@/lib/msdbSync";
 import { escapeRegex } from "@/lib/projects/rules";
 import { authorizeSuperadmin } from "@/lib/team";
 import { PLATFORM_MARK_KEYS, TASK_OPTION_LABEL_MAX, getOptionList } from "@/lib/tasks/options";
@@ -137,5 +138,17 @@ export async function deleteTaskOptionAction(formData) {
   }
   await TaskOption.deleteOne({ _id: option._id });
   refresh();
+  return { ok: true };
+}
+
+/** "Sync now": refresh the MSDB mirror (Related pickers) from the MSDB API. */
+export async function syncMsdbNowAction() {
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
+
+  const result = await syncMsdbRefs({ reason: "manual" });
+  refresh();
+  if (result.skipped) return fail("A sync is already running. Try again in a couple of minutes.");
+  if (!result.ok) return fail(`Some lists didn't sync: ${result.error}`);
   return { ok: true };
 }

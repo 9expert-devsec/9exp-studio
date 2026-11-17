@@ -12,6 +12,7 @@ import { CalendarDays, Clock, Link2, PlayCircle, TriangleAlert, UserRound } from
 import { searchRelatedAction } from "@/app/(app)/projects/task-actions";
 import Avatar from "@/components/ui/Avatar";
 import Combobox from "@/components/ui/Combobox";
+import MsdbIcon from "@/components/tasks/MsdbIcon";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
 import { WORK_LEVELS } from "@/lib/tasks/types";
@@ -122,7 +123,7 @@ function KindTag({ kind }) {
 function RelatedRow({ s, showKind }) {
   return (
     <span className="flex min-w-0 items-center gap-2">
-      {s.code && <span className="shrink-0 font-mono text-xs text-fg-muted">{s.code}</span>}
+      <MsdbIcon url={s.iconUrl} code={s.code} name={s.name} />
       <span className="min-w-0 truncate">{s.name}</span>
       {showKind && <KindTag kind={s.kind} />}
     </span>

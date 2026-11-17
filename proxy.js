@@ -8,8 +8,9 @@ const { auth } = NextAuth(authConfig);
 export default auth;
 
 export const config = {
-  // Skip Auth.js endpoints, Next internals, the app icon, brand assets and any static file.
+  // Skip Auth.js endpoints, cron routes (they check CRON_SECRET themselves), Next
+  // internals, the app icon, brand assets and any static file.
   matcher: [
-    "/((?!api/auth|_next/static|_next/image|icon.png|brand/|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|txt|xml|css|js|map|woff2?)$).*)",
+    "/((?!api/auth|api/cron/|_next/static|_next/image|icon.png|brand/|favicon.ico|.*\\.(?:png|jpg|jpeg|gif|svg|webp|ico|txt|xml|css|js|map|woff2?)$).*)",
   ],
 };
