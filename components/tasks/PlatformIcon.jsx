@@ -1,11 +1,11 @@
 // The ONE platform icon component + registry: stored icon key (lib/tasks/options.js
 // PLATFORM_MARKS) → react-icons brand logo in its own colour, no tile behind it.
 // Brand colours are runtime values (inline style); TikTok and X use the theme
-// foreground (their black would vanish on the dark theme), Website/Other the muted
-// text colour (static classes). Decorative: the label next to it carries the
-// meaning. No hooks: renders from server and client components.
+// foreground (their black would vanish on the dark theme), Internal/Website/Other
+// the muted text colour (static classes). Decorative: the label next to it carries
+// the meaning. No hooks: renders from server and client components.
 
-import { FaCircleQuestion, FaFacebook, FaGlobe, FaInstagram, FaLine, FaTiktok, FaXTwitter, FaYoutube } from "react-icons/fa6";
+import { FaBuilding, FaCircleQuestion, FaFacebook, FaGlobe, FaInstagram, FaLine, FaTiktok, FaXTwitter, FaYoutube } from "react-icons/fa6";
 import { SiShopee } from "react-icons/si";
 
 const PLATFORM_ICONS = {
@@ -16,6 +16,7 @@ const PLATFORM_ICONS = {
   line: { Icon: FaLine, color: "#06C755" },
   x: { Icon: FaXTwitter, className: "text-fg" },
   shopee: { Icon: SiShopee, color: "#EE4D2D" }, // Simple Icons: FA6 has no Shopee logo
+  internal: { Icon: FaBuilding, className: "text-fg-muted" },
   website: { Icon: FaGlobe, className: "text-fg-muted" },
   other: { Icon: FaCircleQuestion, className: "text-fg-muted" },
 };

@@ -11,11 +11,13 @@ import { refresh } from "next/cache";
 import { syncMsdbRefs } from "@/lib/msdbSync";
 import { escapeRegex } from "@/lib/projects/rules";
 import { authorizeSuperadmin } from "@/lib/team";
-import { PLATFORM_MARK_KEYS, TASK_OPTION_LABEL_MAX, getOptionList } from "@/lib/tasks/options";
+import { PLATFORM_MARK_KEYS, TASK_OPTION_LABEL_MAX, WORK_TYPE_PLATFORMS_MAX, getOptionList } from "@/lib/tasks/options";
 import Task from "@/models/Task";
 import TaskOption from "@/models/TaskOption";
 
 const fail = (error) => ({ ok: false, error });
+const linkedMessage = (n) =>
+  `Linked to ${n} work type${n === 1 ? "" : "s"} — unlink ${n === 1 ? "it" : "them"} or deactivate the platform instead.`;
 const str = (v) => (typeof v === "string" ? v : "");
 
 async function findOption(formData) {
@@ -24,7 +26,21 @@ async function findOption(formData) {
   return TaskOption.findById(id).lean();
 }
 
-/** Label (+ icon for lists that have one); duplicate labels in a list (any case) are rejected. */
+/**
+ * Work Type → linked platforms: ≥ 1, each an existing option of the `platform`
+ * list (active or inactive). Returns { platforms: ObjectId[] } or { error }.
+ */
+async function readPlatforms(formData) {
+  const ids = [...new Set(formData.getAll("platforms").map(str).filter(Boolean))];
+  if (ids.length === 0) return { error: "Choose at least one platform." };
+  if (ids.length > WORK_TYPE_PLATFORMS_MAX) return { error: `Choose at most ${WORK_TYPE_PLATFORMS_MAX} platforms.` };
+  if (!ids.every((id) => mongoose.isValidObjectId(id))) return { error: "Choose platforms from the list." };
+  const found = await TaskOption.countDocuments({ _id: { $in: ids }, list: "platform" });
+  if (found !== ids.length) return { error: "One of those platforms no longer exists. Reload and try again." };
+  return { platforms: ids.map((id) => new mongoose.Types.ObjectId(id)) };
+}
+
+/** Label (+ icon / platforms for lists that have them); duplicate labels in a list (any case) are rejected. */
 async function readFields(formData, list, selfId = null) {
   const label = str(formData.get("label")).trim();
   if (!label) return { error: "Label is required." };
@@ -40,7 +56,13 @@ async function readFields(formData, list, selfId = null) {
     icon = str(formData.get("icon"));
     if (!PLATFORM_MARK_KEYS.includes(icon)) return { error: "Choose an icon." };
   }
-  return { label, icon };
+  let platforms;
+  if (list.hasPlatforms) {
+    const read = await readPlatforms(formData);
+    if (read.error) return { error: read.error };
+    platforms = read.platforms;
+  }
+  return { label, icon, platforms };
 }
 
 export async function createTaskOptionAction(formData) {
@@ -58,6 +80,7 @@ export async function createTaskOptionAction(formData) {
       list: list.key,
       label: fields.label,
       icon: fields.icon,
+      ...(list.hasPlatforms ? { platforms: fields.platforms } : {}),
       order: (last?.order ?? 0) + 1,
       active: true,
       createdBy: caller.me._id,
@@ -81,7 +104,11 @@ export async function updateTaskOptionAction(formData) {
   if (fields.error) return fail(fields.error);
 
   try {
-    await TaskOption.updateOne({ _id: option._id }, { $set: { label: fields.label, icon: fields.icon } }, { runValidators: true });
+    // platforms only exists on lists with hasPlatforms; strip it everywhere else.
+    const update = list.hasPlatforms
+      ? { $set: { label: fields.label, icon: fields.icon, platforms: fields.platforms } }
+      : { $set: { label: fields.label, icon: fields.icon }, $unset: { platforms: 1 } };
+    await TaskOption.updateOne({ _id: option._id }, update, { runValidators: true });
   } catch (err) {
     if (err?.code === 11000) return fail(`“${fields.label}” already exists in ${list.label}.`);
     throw err;
@@ -130,6 +157,11 @@ export async function deleteTaskOptionAction(formData) {
 
   const option = await findOption(formData);
   if (!option) return fail("That option no longer exists.");
+  // A platform linked from any work type can't be deleted (deactivating keeps links).
+  if (option.list === "platform") {
+    const linked = await TaskOption.countDocuments({ list: "work_type", platforms: option._id });
+    if (linked > 0) return fail(linkedMessage(linked));
+  }
   const used = await Task.countDocuments({ $or: [{ "details.videoType": option._id }, { "details.platforms": option._id }] });
   if (used > 0) {
     return fail(

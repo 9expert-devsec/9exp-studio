@@ -44,21 +44,38 @@ async function TaskOptionsData({ searchParams }) {
   ]);
   const usedBy = new Map(usage.map((u) => [String(u._id), u.n]));
 
+  // platform _id → how many work types link to it (blocks deleting the platform).
+  const linkedBy = new Map();
+  for (const o of options) {
+    if (o.list !== "work_type") continue;
+    for (const p of new Set((o.platforms ?? []).map(String))) linkedBy.set(p, (linkedBy.get(p) ?? 0) + 1);
+  }
+
   const lists = Object.fromEntries(TASK_OPTION_LISTS.map((l) => [l.key, []]));
   for (const o of options) {
-    lists[o.list]?.push({
-      id: o._id.toString(),
+    const list = TASK_OPTION_LISTS.find((l) => l.key === o.list);
+    if (!list) continue;
+    const id = o._id.toString();
+    lists[o.list].push({
+      id,
       label: o.label,
       icon: o.icon ?? null,
       active: !!o.active,
-      usedBy: usedBy.get(o._id.toString()) ?? 0,
+      usedBy: usedBy.get(id) ?? 0,
+      linkedBy: linkedBy.get(id) ?? 0,
+      ...(list.hasPlatforms ? { platforms: [...new Set((o.platforms ?? []).map(String))] } : {}),
     });
   }
+
+  // Work Type tab filter: ?platform=<platform option id> | "none"; anything else = All.
+  const platformFilter =
+    listKey === "work_type" && (sp?.platform === "none" || lists.platform.some((p) => p.id === sp?.platform)) ? sp.platform : null;
 
   return (
     <div className="flex flex-col gap-6">
       <TaskOptionsManager
         listKey={listKey}
+        platformFilter={platformFilter}
         lists={TASK_OPTION_LISTS}
         options={lists}
         marks={PLATFORM_MARKS.map(({ key, label }) => ({ key, label }))}
