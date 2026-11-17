@@ -22,10 +22,15 @@ const TaskSchema = new mongoose.Schema(
     assetStatus: { type: String, default: null },
     // A single person, optional.
     assignee: { type: ObjectId, ref: "User", default: null },
-    // Optional, date-only (UTC midnight), like project/content dates.
-    dueDate: { type: Date, default: null },
+    // Optional datetimes (entered in Asia/Bangkok); dueAt >= startAt when both are
+    // set (lib/tasks/details.js). Replaces the unused date-only `dueDate`.
+    startAt: { type: Date, default: null },
+    dueAt: { type: Date, default: null },
     description: { type: String, trim: true, maxlength: TASK_DESCRIPTION_MAX, default: "" },
-    // Reserved for the Step 2 type-specific fields (next round).
+    // Type-specific fields, validated per type by lib/tasks/details.js (clip:
+    // videoType, platforms, fileLocation, editingRequirements, referenceUrl,
+    // relatedCourse / relatedProgram / relatedSkill snapshots, workLevel,
+    // contentReviewer, videoReviewer). {} = no details yet.
     details: { type: mongoose.Schema.Types.Mixed, default: {} },
     createdBy: { type: ObjectId, ref: "User", required: true },
   },

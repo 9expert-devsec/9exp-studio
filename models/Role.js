@@ -20,9 +20,19 @@ const RoleSchema = new mongoose.Schema(
     name: { type: String, required: true, trim: true, maxlength: ROLE_NAME_MAX },
     description: { type: String, trim: true, maxlength: ROLE_DESCRIPTION_MAX, default: "" },
     isSystem: { type: Boolean, default: false },
-    // RESERVED: unused until the team confirms the permission set (role matrix).
-    // Nothing reads or enforces it yet; Team Management is gated on "superadmin" only.
-    permissions: { type: [String], default: [] },
+    // Role permissions (checked only by lib/permissions.js). Rule for both settings:
+    // NOT configured = unrestricted; once saved (even empty) it restricts. Superadmin
+    // always passes.
+    //
+    // Task types this role works on (lib/tasks/types.js keys). Absent/null = not
+    // configured. `default: undefined` so new roles don't get [] (= restricted).
+    taskTypes: { type: [String], default: undefined },
+    // Generic permission keys (review_content, review_video, …). Legacy roles were
+    // seeded with permissions: [] before anything used it, so an array alone does
+    // NOT mean "configured": permissionsConfiguredAt is set when the Roles form
+    // saves it, and cleared (with the array) when it is set back to unconfigured.
+    permissions: { type: [String], default: undefined },
+    permissionsConfiguredAt: { type: Date, default: null },
   },
   { timestamps: true, collection: "roles" }
 );

@@ -19,7 +19,6 @@ import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
 import Card, { cardClass } from "@/components/ui/Card";
 import { taskFiltersQuery } from "@/lib/projects/filters";
-import { formatShortDate } from "@/lib/projects/format";
 import { statusInfo } from "@/lib/projects/status";
 import { getTaskType } from "@/lib/tasks/types";
 import ContentToolbar from "./ContentToolbar";
@@ -128,7 +127,13 @@ function TaskTypeTag({ type, label }) {
 /** Status chip: the catalog's Thai label, coloured by its group. */
 const TaskStatusChip = ({ task }) => <StatusChip status={task.group} label={task.statusLabel} />;
 
-const dueLabel = (task) => (task.dueDate ? formatShortDate(task.dueDate) : "No due date");
+const dueLabel = (task) => task.dueAtLabel || "No due date";
+
+/** Tiny work-level pill (Clip details). */
+const WorkLevelPill = ({ label }) =>
+  label ? (
+    <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-[10px] font-semibold text-fg-muted">{label}</span>
+  ) : null;
 
 /**
  * Task card: the content card's "Recent Tasks" (compact: due date in the body, no
@@ -144,7 +149,7 @@ export function TaskCard({ task, withFooter = false }) {
       <TaskCardBody task={task} showDue={!withFooter} />
       {withFooter && (
         <div className="flex min-h-11 items-center justify-between gap-2 border-t border-line-subtle bg-card-inset px-3.5 py-1.5">
-          <span className={`inline-flex items-center gap-1.5 text-xs ${task.dueDate ? "text-fg" : "text-fg-muted"}`}>
+          <span className={`inline-flex items-center gap-1.5 text-xs ${task.dueAt ? "text-fg" : "text-fg-muted"}`}>
             <CalendarDays className="size-3.5 text-fg-muted" aria-hidden="true" />
             {dueLabel(task)}
           </span>
@@ -163,6 +168,7 @@ function TaskCardBody({ task, showDue }) {
           Task {task.numberLabel}
         </span>
         <TaskTypeTag type={task.type} label={task.typeLabel} />
+        <WorkLevelPill label={task.workLevelLabel} />
         <span className="ml-auto shrink-0">
           <TaskStatusChip task={task} />
         </span>
@@ -170,7 +176,7 @@ function TaskCardBody({ task, showDue }) {
       <h4 className="line-clamp-2 break-words text-sm font-semibold text-fg">{task.title}</h4>
       {(showDue || task.assetStatusLabel) && (
         <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
-          {showDue && <span>{task.dueDate ? `Due ${dueLabel(task)}` : "No due date"}</span>}
+          {showDue && <span>{task.dueAt ? `Due ${dueLabel(task)}` : "No due date"}</span>}
           {task.assetStatusLabel && <span>Asset · {task.assetStatusLabel}</span>}
         </p>
       )}
@@ -224,7 +230,10 @@ export function TasksTable({ tasks, sort, sortHref }) {
                 </td>
                 <td className={`${td} whitespace-nowrap`}>
                   <span className="block text-xs font-semibold uppercase tracking-wider text-fg-muted">{idLabel}</span>
-                  <TaskTypeTag type={t.type} label={t.typeLabel} />
+                  <span className="flex items-center gap-1.5">
+                    <TaskTypeTag type={t.type} label={t.typeLabel} />
+                    <WorkLevelPill label={t.workLevelLabel} />
+                  </span>
                 </td>
                 <td className={`${td} max-w-xs truncate font-semibold text-fg`} title={t.title}>{t.title}</td>
                 <td className={td}>
@@ -237,7 +246,7 @@ export function TasksTable({ tasks, sort, sortHref }) {
                     <span className="text-fg-muted">Unassigned</span>
                   )}
                 </td>
-                <td className={`${td} whitespace-nowrap text-fg-muted`}>{t.dueDate ? formatShortDate(t.dueDate) : "—"}</td>
+                <td className={`${td} whitespace-nowrap text-fg-muted`}>{t.dueAtLabel || "—"}</td>
                 <td className={td}>
                   <TaskStatusChip task={t} />
                 </td>
@@ -349,12 +358,14 @@ const ADD_TASK_ID = "add-task-trigger";
  * Summary line counts ALL tasks (cancelled included).
  */
 export function TasksSection({ content, filters }) {
-  const { stats, tasks } = content;
-  const query = (next) => `${content.href}${taskFiltersQuery({ ...filters, newTask: false, ...next })}`;
+  const { stats } = content;
+  const query = (next) => `${content.href}${taskFiltersQuery({ ...filters, newTask: false, editTask: "", ...next })}`;
   const sortHref = query({ sort: filters.sort === "due_desc" ? "due_asc" : "due_desc" });
   const canAdd = content.taskTypes.length > 0;
   const addHref = canAdd ? query({ newTask: true }) : null;
   const n = stats.all;
+  // "Edit task" in each ⋯ opens the same drawer in edit mode (?editTask=<id>).
+  const tasks = content.tasks.map((t) => (t.canEdit ? { ...t, editHref: query({ editTask: t.id }) } : t));
 
   return (
     <section aria-labelledby="tasks-heading" className="flex flex-col gap-4">
@@ -402,9 +413,10 @@ export function TasksSection({ content, filters }) {
         </p>
       )}
 
-      {canAdd && (
+      {(canAdd || content.drawer?.mode === "edit") && (
         <CreateTaskDrawer
-          open={filters.newTask}
+          open={!!content.drawer}
+          drawer={content.drawer}
           projectId={content.projectId}
           contentId={content.id}
           projectName={content.projectName}

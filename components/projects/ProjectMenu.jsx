@@ -454,15 +454,17 @@ function DeleteContentConfirm({ content, then, onDone }) {
 }
 
 /**
- * "⋯" menu for a task (Cards footer and Table rows): Change status
- * (task.canChangeStatus) · Delete task (task.canDelete). Both are re-checked by the
+ * "⋯" menu for a task (Cards footer and Table rows): Edit task (task.canEdit, opens
+ * the drawer via task.editHref) · Change status (task.canChangeStatus) · Delete
+ * task (task.canDelete). Both are re-checked by the
  * server actions, which also recompute the content/project roll-ups and refresh in
  * place. Renders nothing when neither applies.
  */
 export function TaskMenu({ task }) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState(null);
-  if (!task.canChangeStatus && !task.canDelete) return null;
+  const canEdit = !!(task.canEdit && task.editHref);
+  if (!canEdit && !task.canChangeStatus && !task.canDelete) return null;
   const close = () => setDialog(null);
   const idLabel = `TASK ${task.numberLabel}`;
 
@@ -492,6 +494,12 @@ export function TaskMenu({ task }) {
         </>
       }
     >
+      {canEdit && (
+        <Link role="menuitem" href={task.editHref} scroll={false} className={itemClass} onClick={() => setOpen(false)}>
+          <Pencil className="size-4 text-fg-muted" aria-hidden="true" />
+          Edit task
+        </Link>
+      )}
       {task.canChangeStatus && (
         <button
           role="menuitem"
@@ -508,7 +516,7 @@ export function TaskMenu({ task }) {
       )}
       {task.canDelete && (
         <>
-          {task.canChangeStatus && <div role="separator" className="my-1 h-px bg-line-subtle" />}
+          {(canEdit || task.canChangeStatus) && <div role="separator" className="my-1 h-px bg-line-subtle" />}
           <button
             role="menuitem"
             type="button"

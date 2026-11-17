@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { label: "Accounts", href: "/team/accounts" },
   { label: "Roles", href: "/team/roles" },
+  { label: "Task Options", href: "/team/task-options" },
 ];
 
 // Figma view-switcher style: `control` pill track; the selected tab is brand-500 with navy text.

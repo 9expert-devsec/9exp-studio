@@ -45,8 +45,8 @@ export default function ContentToolbar({ kind = "content", basePath, filters, ad
   const [shownStatus, setShownStatus] = useOptimistic(filters.status);
   const [, startTransition] = useTransition();
   const toQuery = QUERY[kind] ?? contentFiltersQuery;
-  // The toolbar never carries the drawer flag (?newTask) into its own links.
-  const hrefFor = (next) => `${basePath}${toQuery({ ...filters, newTask: false, ...next })}`;
+  // The toolbar never carries the drawer flags (?newTask / ?editTask) into its own links.
+  const hrefFor = (next) => `${basePath}${toQuery({ ...filters, newTask: false, editTask: "", ...next })}`;
   const replace = (next) => router.replace(hrefFor(next), { scroll: false });
   const isTasks = kind === "tasks";
   const q = filters.q;

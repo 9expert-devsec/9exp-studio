@@ -11,6 +11,10 @@
     "seed-roles": "node --env-file=.env.local scripts/seed-roles.mjs"
   },
   "dependencies": {
+    "@tiptap/extension-text-align": "^3.34.0",
+    "@tiptap/pm": "^3.34.0",
+    "@tiptap/react": "^3.34.0",
+    "@tiptap/starter-kit": "^3.34.0",
     "bcryptjs": "^3.0.3",
     "cloudinary": "^2.11.0",
     "image-size": "^2.1.0",
@@ -20,6 +24,7 @@
     "next-auth": "^5.0.0-beta.32",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "sanitize-html": "^2.18.2",
     "server-only": "^0.0.1"
   },
   "devDependencies": {

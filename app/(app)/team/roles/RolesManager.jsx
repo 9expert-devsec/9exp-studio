@@ -43,7 +43,16 @@ function deleteBlockReason(role) {
   return null;
 }
 
-export default function RolesManager({ roles }) {
+const SUPERADMIN_KEY = "superadmin";
+
+/** Short summary for the table: "All" (not configured) or the chosen labels. */
+function settingSummary(keys, options) {
+  if (keys === null) return "All";
+  if (keys.length === 0) return "None";
+  return options.filter((o) => keys.includes(o.key)).map((o) => o.label).join(", ");
+}
+
+export default function RolesManager({ roles, taskTypeOptions, permissionOptions }) {
   // { type: "add" } | { type: "edit", role } | { type: "delete", role } | null
   const [modal, setModal] = useState(null);
   const close = () => setModal(null);
@@ -57,7 +66,7 @@ export default function RolesManager({ roles }) {
             Roles
           </h2>
           <p className="text-sm text-fg-muted">
-            Each account has exactly one role. Permissions are pending confirmation.
+            Each account has exactly one role. A role sets which task types its people work on and what they may review.
           </p>
         </div>
         <button type="button" onClick={() => setModal({ type: "add" })} className={btnPrimary}>
@@ -84,12 +93,14 @@ export default function RolesManager({ roles }) {
         </div>
       ) : (
         <div className={`${card} overflow-x-auto`}>
-          <table className="w-full min-w-[720px]">
+          <table className="w-full min-w-[900px]">
             <thead className="border-b border-line">
               <tr>
                 <th scope="col" className={th}>Name</th>
                 <th scope="col" className={th}>Key</th>
                 <th scope="col" className={th}>Description</th>
+                <th scope="col" className={th}>Task types</th>
+                <th scope="col" className={th}>Review</th>
                 <th scope="col" className={`${th} text-right`}>Accounts</th>
                 <th scope="col" className={`${th} text-right`}>Actions</th>
               </tr>
@@ -111,6 +122,12 @@ export default function RolesManager({ roles }) {
                     </td>
                     <td className={`${td} max-w-xs text-fg-muted`}>
                       {role.description || <span className="text-fg-muted">—</span>}
+                    </td>
+                    <td className={`${td} max-w-48 text-xs text-fg-muted`}>
+                      {role.key === SUPERADMIN_KEY ? "All (always)" : settingSummary(role.taskTypes, taskTypeOptions)}
+                    </td>
+                    <td className={`${td} max-w-40 text-xs text-fg-muted`}>
+                      {role.key === SUPERADMIN_KEY ? "All (always)" : settingSummary(role.permissions, permissionOptions)}
                     </td>
                     <td className={`${td} text-right tabular-nums`}>{role.accountCount}</td>
                     <td className={`${td} text-right`}>
@@ -153,11 +170,13 @@ export default function RolesManager({ roles }) {
       )}
 
       <Modal open={modal?.type === "add"} onClose={close} title="Add role">
-        <RoleForm existingKeys={existingKeys} onDone={close} />
+        <RoleForm existingKeys={existingKeys} onDone={close} taskTypeOptions={taskTypeOptions} permissionOptions={permissionOptions} />
       </Modal>
 
       <Modal open={modal?.type === "edit"} onClose={close} title="Edit role">
-        {modal?.type === "edit" && <RoleForm role={modal.role} onDone={close} />}
+        {modal?.type === "edit" && (
+          <RoleForm role={modal.role} onDone={close} taskTypeOptions={taskTypeOptions} permissionOptions={permissionOptions} />
+        )}
       </Modal>
 
       <Modal
@@ -176,9 +195,55 @@ export default function RolesManager({ roles }) {
   );
 }
 
-// Add when `role` is undefined; edit (name + description only) otherwise.
-function RoleForm({ role, existingKeys = [], onDone }) {
+/**
+ * One role setting: "All (not configured)" or "Only the selected" + checkboxes.
+ * `value`: null (all) or the selected keys.
+ */
+function SettingField({ legend, hint, name, options, value, onChange }) {
+  const limited = value !== null;
+  const toggle = (key) => onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
+  return (
+    <fieldset className="rounded-xl border border-line p-4">
+      <legend className="px-1 text-sm font-medium text-fg">{legend}</legend>
+      <p className="text-xs text-fg-muted">{hint}</p>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-sm text-fg">
+        <label className="inline-flex items-center gap-2">
+          <input type="radio" name={`${name}-mode`} checked={!limited} onChange={() => onChange(null)} className="size-4 accent-brand-500" />
+          All (not configured)
+        </label>
+        <label className="inline-flex items-center gap-2">
+          <input type="radio" name={`${name}-mode`} checked={limited} onChange={() => onChange([])} className="size-4 accent-brand-500" />
+          Only the selected
+        </label>
+      </div>
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {options.map((o) => (
+          <label
+            key={o.key}
+            className={`inline-flex items-center gap-2 text-sm ${limited ? "text-fg" : "text-fg-muted"}`}
+          >
+            <input
+              type="checkbox"
+              disabled={!limited}
+              checked={limited && value.includes(o.key)}
+              onChange={() => toggle(o.key)}
+              className="size-4 accent-brand-500"
+            />
+            {o.label}
+            {o.enabled === false && <span className="text-xs text-fg-muted">(coming soon)</span>}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+
+// Add when `role` is undefined; edit otherwise (key stays locked).
+function RoleForm({ role, existingKeys = [], onDone, taskTypeOptions, permissionOptions }) {
   const isEdit = !!role;
+  const isSuperadmin = role?.key === SUPERADMIN_KEY;
+  const [taskTypes, setTaskTypes] = useState(role?.taskTypes ?? null);
+  const [permissions, setPermissions] = useState(role?.permissions ?? null);
   const [name, setName] = useState(role?.name ?? "");
   const [key, setKey] = useState(role?.key ?? "");
   const [keyTouched, setKeyTouched] = useState(false);
@@ -198,6 +263,10 @@ function RoleForm({ role, existingKeys = [], onDone }) {
     fd.set("description", description);
     if (isEdit) fd.set("id", role.id);
     else fd.set("key", keyValue);
+    fd.set("taskTypesMode", taskTypes === null ? "all" : "limited");
+    (taskTypes ?? []).forEach((k) => fd.append("taskTypes", k));
+    fd.set("permissionsMode", permissions === null ? "all" : "limited");
+    (permissions ?? []).forEach((k) => fd.append("permissions", k));
 
     startTransition(async () => {
       const result = isEdit ? await updateRoleAction(fd) : await createRoleAction(fd);
@@ -283,17 +352,29 @@ function RoleForm({ role, existingKeys = [], onDone }) {
         />
       </div>
 
-      {isEdit && (
-        <fieldset
-          disabled
-          aria-describedby="permissions-pending"
-          className="rounded-xl border border-dashed border-line bg-card-inset p-4 opacity-80"
-        >
-          <legend className="px-1 text-sm font-medium text-fg">Permissions</legend>
-          <p id="permissions-pending" className="text-sm text-fg-muted">
-            Pending confirmation — permissions will be added once the role matrix is approved.
-          </p>
-        </fieldset>
+      {isSuperadmin ? (
+        <p className="rounded-xl bg-card-inset p-4 text-sm text-fg-muted">
+          Super Admin always has every task type and permission.
+        </p>
+      ) : (
+        <>
+          <SettingField
+            legend="Task types"
+            hint="Task types this role works on. Leave unconfigured to allow all."
+            name="role-task-types"
+            options={taskTypeOptions}
+            value={taskTypes}
+            onChange={setTaskTypes}
+          />
+          <SettingField
+            legend="Review permissions"
+            hint="What this role may review. Leave unconfigured to allow all."
+            name="role-permissions"
+            options={permissionOptions}
+            value={permissions}
+            onChange={setPermissions}
+          />
+        </>
       )}
 
       <p role="alert" className={`min-h-5 ${errorText}`}>{error}</p>

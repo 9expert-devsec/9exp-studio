@@ -1,20 +1,23 @@
 "use server";
 
 // Every export of a "use server" module is a public POST endpoint.
-// Export ONLY the three task actions; helpers stay module-private.
+// Export ONLY the task actions below; helpers stay module-private.
 //
-// Each action re-reads the viewer from the DB, re-loads the project with
+// Each write action re-reads the viewer from the DB, re-loads the project with
 // findViewableProject (missing / not viewable → "not found"), loads the content
 // ONLY within that project (findProjectContent) and the task ONLY within that
 // content + project (findContentTask), then re-checks lib/projects/access.js.
-// Type and status keys are validated against the catalog (lib/tasks/types.js).
-// Every write is followed by recomputeRollups().
+// Type and status keys are validated against the catalog (lib/tasks/types.js);
+// Step 2 details (incl. assignee / reviewer eligibility and MSDB snapshots) by
+// lib/tasks/details.js. Every write is followed by recomputeRollups().
 
 import { refresh } from "next/cache";
 import {
   canChangeTaskStatus,
   canCreateTask,
   canDeleteTask,
+  canEditTask,
+  canView,
   findContentTask,
   findProjectContent,
   findViewableProject,
@@ -22,7 +25,9 @@ import {
 } from "@/lib/projects/access";
 import { recomputeRollups } from "@/lib/projects/progress";
 import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
-import { parseTaskForm } from "@/lib/projects/validate";
+import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
+import { searchCourses, searchPrograms, searchSkills } from "@/lib/msdb";
+import { parseTaskDetails } from "@/lib/tasks/details";
 import {
   hasAssetStatus,
   initialAssetStatus,
@@ -52,10 +57,18 @@ async function loadScope(formData) {
   return { viewer, project, content };
 }
 
+/** Step 2 was submitted: validate details for `type` (or { skip: true }). */
+async function readDetails(formData, type, project, existing) {
+  if (str(formData.get("withDetails")) !== "1") return { skip: true };
+  return parseTaskDetails(type, formData.get("details"), { project, existing });
+}
+
 /**
- * Create Task, Step 1 (title + type). Status = the type's initial status (post
- * also gets the initial Status Asset); no assignee / due date yet. A disabled type
- * (production) or one the viewer's role can't create is rejected even if posted.
+ * Create a task. Step 1 alone: title + type, the type's initial status (post also
+ * gets the initial Status Asset), no assignee / dates. From Step 2
+ * (withDetails=1): the same doc also gets details + assignee + startAt/dueAt, in
+ * ONE create (atomic). A disabled type (production) or one the viewer's role
+ * doesn't work on is rejected even if posted.
  */
 export async function createTaskAction(formData) {
   const scope = await loadScope(formData);
@@ -66,12 +79,16 @@ export async function createTaskAction(formData) {
   const parsed = parseTaskForm(formData);
   if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
   const { title, type } = parsed.values;
-  if (!canCreateTask(viewer, project, type)) {
+  if (!(await canCreateTask(viewer, project, type))) {
     return fail(CHECK_FIELDS, { type: "You can't create this type of task." });
   }
 
   const status = initialStatus(type);
   if (!isValidStatus(type, status)) return fail(CHECK_FIELDS, { type: "This task type isn't available yet." });
+
+  const extra = await readDetails(formData, type, project, null);
+  if (extra.errors) return fail(CHECK_FIELDS, extra.errors);
+  const more = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
 
   const task = await createNumbered(TASK_SEQ, content._id, {
     project: project._id,
@@ -80,13 +97,48 @@ export async function createTaskAction(formData) {
     type,
     status,
     assetStatus: hasAssetStatus(type) ? initialAssetStatus(type) : null,
-    assignee: null,
-    dueDate: null,
+    assignee: more.assignee,
+    startAt: more.startAt,
+    dueAt: more.dueAt,
+    details: more.details,
     createdBy: viewer.id,
   });
   if (!task) return fail("Could not number this task — please try again.");
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Edit a task: the title always; from Step 2 (withDetails=1) also details,
+ * assignee and timeline. The type is locked after creation; status has its own
+ * action.
+ */
+export async function updateTaskAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  const { viewer, project, content } = scope;
+
+  const task = await findContentTask(project, content, str(formData.get("taskId")));
+  if (!task) return fail(TASK_NOT_FOUND);
+  if (!canEditTask(viewer, project, task)) {
+    return fail(
+      project.status === "cancelled"
+        ? PROJECT_CANCELLED
+        : "Only the task's creator, the project owner or an admin can edit it."
+    );
+  }
+
+  const parsedTitle = parseTaskTitle(formData);
+  const extra = await readDetails(formData, task.type, project, task);
+  const errors = { ...(parsedTitle.error ? { title: parsedTitle.error } : {}), ...(extra.errors ?? {}) };
+  if (Object.keys(errors).length) return fail(CHECK_FIELDS, errors);
+
+  const set = { title: parsedTitle.title };
+  if (extra.values) Object.assign(set, extra.values);
+  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: set });
+
   refresh();
   return { ok: true };
 }
@@ -150,4 +202,27 @@ export async function deleteTaskAction(formData) {
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
   return { ok: true };
+}
+
+/**
+ * Related pickers (Step 2): READ-ONLY MSDB search, max 20. Only for a signed-in
+ * viewer who can see the project. kind: "public" | "online" | "program" | "skill".
+ */
+export async function searchRelatedAction(projectId, kind, q) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  const project = await findViewableProject(viewer, str(projectId));
+  if (!project || !canView(viewer, project)) return fail(PROJECT_NOT_FOUND);
+  const term = str(q);
+  try {
+    const results =
+      kind === "program"
+        ? await searchPrograms(term)
+        : kind === "skill"
+          ? await searchSkills(term)
+          : await searchCourses({ q: term, kind: str(kind) });
+    return { ok: true, results };
+  } catch {
+    return fail("Search is unavailable right now.");
+  }
 }
