@@ -8,7 +8,7 @@
 // it (lib/tasks/details.js).
 
 import { useState } from "react";
-import { CalendarDays, Clock, Link2, PlayCircle, UserRound } from "lucide-react";
+import { CalendarDays, Clock, Link2, PlayCircle, TriangleAlert, UserRound } from "lucide-react";
 import { searchRelatedAction } from "@/app/(app)/projects/task-actions";
 import Avatar from "@/components/ui/Avatar";
 import Combobox from "@/components/ui/Combobox";
@@ -78,26 +78,34 @@ function PersonRow({ p }) {
 function PersonPicker({ id, people, value, onChange, error, emptyText }) {
   const selected = people.find((p) => p.id === value) ?? null;
   return (
-    <Combobox
-      id={id}
-      value={selected}
-      onChange={(p) => onChange(p?.id ?? "")}
-      options={people}
-      getLabel={(p) => p.name}
-      renderOption={(p) => <PersonRow p={p} />}
-      renderChip={(p) => (
-        <>
-          <Avatar name={p.name} url={p.avatarUrl} size={20} />
-          <span className="truncate">{p.name}</span>
-        </>
+    <>
+      <Combobox
+        id={id}
+        value={selected}
+        onChange={(p) => onChange(p?.id ?? "")}
+        options={people}
+        getLabel={(p) => p.name}
+        renderOption={(p) => <PersonRow p={p} />}
+        renderChip={(p) => (
+          <>
+            <Avatar name={p.name} url={p.avatarUrl} size={20} />
+            <span className="truncate">{p.name}</span>
+          </>
+        )}
+        leadingIcon={UserRound}
+        placeholder="Search people"
+        emptyText={emptyText}
+        listLabel="People"
+        invalid={!!error}
+        describedBy={selected?.ineligible ? `${id}-warning ${id}-error` : `${id}-error`}
+      />
+      {selected?.ineligible && (
+        <p id={`${id}-warning`} className="mt-1.5 flex items-center gap-1.5 text-xs text-warning">
+          <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />
+          No longer eligible for this role — choose someone else or keep as is
+        </p>
       )}
-      leadingIcon={UserRound}
-      placeholder="Search people"
-      emptyText={emptyText}
-      listLabel="People"
-      invalid={!!error}
-      describedBy={`${id}-error`}
-    />
+    </>
   );
 }
 
