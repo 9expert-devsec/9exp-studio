@@ -11,7 +11,7 @@ const TaskOptionSchema = new mongoose.Schema(
   {
     list: { type: String, enum: TASK_OPTION_LIST_KEYS, required: true, index: true },
     label: { type: String, required: true, trim: true, maxlength: TASK_OPTION_LABEL_MAX },
-    // Platform list only: a PLATFORM_MARKS key.
+    // Platform list only: a PLATFORM_MARKS key (rendered by components/tasks/PlatformIcon.jsx).
     icon: { type: String, enum: [...PLATFORM_MARK_KEYS, null], default: null },
     order: { type: Number, default: 0 },
     active: { type: Boolean, default: true },

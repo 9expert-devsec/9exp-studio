@@ -16,7 +16,7 @@ import MsdbIcon from "@/components/tasks/MsdbIcon";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
 import { WORK_LEVELS } from "@/lib/tasks/types";
-import PlatformMark from "./PlatformMark";
+import PlatformIcon from "./PlatformIcon";
 
 const FILE_LOCATION_MAX = 1000;
 
@@ -213,13 +213,13 @@ export default function ClipDetailsStep({ values, setField, errors, projectId, o
             options={activePlatforms}
             renderOption={(o) => (
               <>
-                <PlatformMark icon={o.icon} />
+                <PlatformIcon icon={o.icon} />
                 {o.label}
               </>
             )}
             renderChip={(o) => (
               <>
-                <PlatformMark icon={o.icon} size={16} />
+                <PlatformIcon icon={o.icon} size={16} />
                 <span className="truncate">{o.label}</span>
               </>
             )}

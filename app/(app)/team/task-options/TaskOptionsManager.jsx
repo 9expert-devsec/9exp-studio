@@ -8,7 +8,7 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ListPlus, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
-import PlatformMark from "@/components/tasks/PlatformMark";
+import PlatformIcon from "@/components/tasks/PlatformIcon";
 import { btnDanger, btnPrimary, btnRow, btnSecondary, card, errorText, input, label, pill, td, th } from "@/components/team/styles";
 import {
   createTaskOptionAction,
@@ -129,7 +129,7 @@ export default function TaskOptionsManager({ listKey, lists, options, marks }) {
                   {list.hasIcon && (
                     <td className={td}>
                       <span className="inline-flex items-center gap-2 text-fg-muted">
-                        <PlatformMark icon={o.icon} />
+                        <PlatformIcon icon={o.icon} />
                         {marks.find((m) => m.key === o.icon)?.label ?? "—"}
                       </span>
                     </td>
@@ -238,7 +238,7 @@ function OptionForm({ list, marks, option, onDone }) {
                 className="flex min-h-11 cursor-pointer items-center gap-2 rounded-[10px] border border-line px-3 text-sm text-fg has-[:checked]:border-brand-500 has-[:checked]:bg-accent-soft has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand-500"
               >
                 <input type="radio" name="option-icon" value={m.key} checked={icon === m.key} onChange={() => setIcon(m.key)} className="sr-only" />
-                <PlatformMark icon={m.key} />
+                <PlatformIcon icon={m.key} />
                 {m.label}
               </label>
             ))}
