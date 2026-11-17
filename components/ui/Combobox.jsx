@@ -108,7 +108,9 @@ export default function Combobox({
   const label = (o) => (renderOption ? renderOption(o) : getLabel(o));
 
   return (
-    <div className="flex flex-col gap-2">
+    // relative: keeps the sr-only status line (position:absolute) inside this
+    // component instead of escaping to the nearest positioned ancestor.
+    <div className="relative flex flex-col gap-2">
       <div
         ref={wrapRef}
         className="relative"

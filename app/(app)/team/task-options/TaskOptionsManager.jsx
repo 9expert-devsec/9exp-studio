@@ -51,8 +51,8 @@ export default function TaskOptionsManager({ listKey, lists, options, marks }) {
         </button>
       </div>
 
-      <nav aria-label="Option lists">
-        <ul className="inline-flex gap-1 rounded-full border border-control-line bg-control p-1">
+      <nav aria-label="Option lists" className="-mx-1 overflow-x-auto px-1 pb-1">
+        <ul className="inline-flex gap-1 whitespace-nowrap rounded-full border border-control-line bg-control p-1">
           {lists.map((l) => (
             <li key={l.key}>
               <Link

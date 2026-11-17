@@ -14,7 +14,8 @@ export const metadata = {
   title: "Task Options · Team Management · 9Expert Studio",
 };
 
-// Admin-managed task option lists (Video Type · Platform). Lives under Team
+// Admin-managed task option lists (lib/tasks/options.js: Video Type · Platform ·
+// Work Type · Article Type · Photo Type). Lives under Team
 // Management because the shell has no separate settings/admin area.
 // Superadmin only (the /team layout gates too; the page checks its own data).
 export default function TaskOptionsPage({ searchParams }) {

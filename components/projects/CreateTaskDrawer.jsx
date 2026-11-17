@@ -121,7 +121,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex h-full min-h-0 flex-col">
-      <header className="flex items-start gap-3 border-b border-line px-5 py-5 sm:px-6">
+      <header className="flex shrink-0 items-start gap-3 border-b border-line px-5 py-5 sm:px-6">
         <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[12px] bg-accent-soft text-brand-500">
           {isEdit ? <Pencil className="size-5" /> : <Plus className="size-5" />}
         </span>
@@ -143,7 +143,10 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
         </button>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-5 py-6 sm:px-6">
+      {/* relative: the containing block for absolutely positioned descendants
+          (sr-only text, popovers) so they scroll and clip with this body instead
+          of overflowing the dialog. */}
+      <div className="relative flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto overscroll-contain px-5 py-6 sm:px-6">
         {step === 1 ? (
           <StepBasics
             isEdit={isEdit}
@@ -179,7 +182,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
         )}
       </div>
 
-      <footer className="border-t border-line bg-card px-5 py-4 sm:px-6">
+      <footer className="shrink-0 border-t border-line bg-card px-5 py-4 sm:px-6">
         {formError && (
           <p role="alert" className="mb-3 text-sm text-danger">
             {formError}

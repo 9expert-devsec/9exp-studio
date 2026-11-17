@@ -35,15 +35,20 @@ export default function Drawer({ open, onClose, labelledBy, returnFocusId, child
     if (!open && dialog.open) dialog.close();
   }, [open]);
 
-  // Body scroll lock while open.
+  // Page scroll lock while open. Released on every exit path: `open` turning
+  // false, unmount (effect cleanup), and the dialog's own close event (Escape,
+  // requestClose) even before the caller flips `open`. Idempotent.
+  const unlockRef = useRef(null);
   useEffect(() => {
     if (!open) return;
     const root = document.documentElement;
     const prev = root.style.overflow;
     root.style.overflow = "hidden";
-    return () => {
+    unlockRef.current = () => {
       root.style.overflow = prev;
+      unlockRef.current = null;
     };
+    return () => unlockRef.current?.();
   }, [open]);
 
   const requestClose = () => ref.current?.close();
@@ -53,14 +58,18 @@ export default function Drawer({ open, onClose, labelledBy, returnFocusId, child
       ref={ref}
       aria-labelledby={labelledBy}
       onClose={() => {
+        unlockRef.current?.();
         if (open) onClose?.();
         if (returnFocusId) document.getElementById(returnFocusId)?.focus();
       }}
-      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-none border-l border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 sm:max-w-[520px]"
+      // overflow-hidden: the <dialog> itself never scrolls (the UA default is
+      // overflow:auto). Only the caller's body region scrolls, so there is exactly
+      // one scrollbar and the footer stays pinned at the bottom.
+      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-none overflow-hidden border-l border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 sm:max-w-[520px]"
     >
       {open && (
         <DrawerClose value={requestClose}>
-          <div className="flex h-full flex-col">{children}</div>
+          <div className="flex h-full min-h-0 flex-col">{children}</div>
         </DrawerClose>
       )}
     </dialog>
