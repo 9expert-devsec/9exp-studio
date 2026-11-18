@@ -7,12 +7,10 @@
 // reviewers) and option lists come from the server; the save re-validates all of
 // it (lib/tasks/details.js).
 
-import { useState } from "react";
-import { CalendarDays, Clock, Link2, PlayCircle, TriangleAlert, UserRound } from "lucide-react";
-import { searchRelatedAction } from "@/app/(app)/projects/task-actions";
-import Avatar from "@/components/ui/Avatar";
+import { CalendarDays, Clock, Link2, PlayCircle } from "lucide-react";
 import Combobox from "@/components/ui/Combobox";
-import MsdbIcon from "@/components/tasks/MsdbIcon";
+import PersonPicker from "@/components/tasks/PersonPicker";
+import RelatedPicker from "@/components/tasks/RelatedPicker";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
 import { WORK_LEVELS } from "@/lib/tasks/types";
@@ -27,9 +25,7 @@ export const emptyClipDetails = () => ({
   fileLocation: "",
   editingRequirements: "",
   referenceUrl: "",
-  relatedCourse: null,
-  relatedProgram: null,
-  relatedSkill: null,
+  related: null, // ONE item: { kind, refId, code, name, iconUrl, isInhouse } (lib/tasks/related.js)
   workLevel: "",
   assignee: "",
   contentReviewer: "",
@@ -61,114 +57,6 @@ function Field({ id, title, required, hint, error, children }) {
       {hint && <p className="mt-1.5 text-xs text-fg-muted">{hint}</p>}
       <FieldError id={`${id}-error`} error={error} />
     </div>
-  );
-}
-
-function PersonRow({ p }) {
-  return (
-    <>
-      <Avatar name={p.name} url={p.avatarUrl} size={24} />
-      <span className="min-w-0">
-        <span className="block truncate font-medium">{p.name}</span>
-        {p.email && <span className="block truncate text-xs text-fg-muted">{p.email}</span>}
-      </span>
-    </>
-  );
-}
-
-function PersonPicker({ id, people, value, onChange, error, emptyText }) {
-  const selected = people.find((p) => p.id === value) ?? null;
-  return (
-    <>
-      <Combobox
-        id={id}
-        value={selected}
-        onChange={(p) => onChange(p?.id ?? "")}
-        options={people}
-        getLabel={(p) => p.name}
-        renderOption={(p) => <PersonRow p={p} />}
-        renderChip={(p) => (
-          <>
-            <Avatar name={p.name} url={p.avatarUrl} size={20} />
-            <span className="truncate">{p.name}</span>
-          </>
-        )}
-        leadingIcon={UserRound}
-        placeholder="Search people"
-        emptyText={emptyText}
-        listLabel="People"
-        invalid={!!error}
-        describedBy={selected?.ineligible ? `${id}-warning ${id}-error` : `${id}-error`}
-      />
-      {selected?.ineligible && (
-        <p id={`${id}-warning`} className="mt-1.5 flex items-center gap-1.5 text-xs text-warning">
-          <TriangleAlert className="size-3.5 shrink-0" aria-hidden="true" />
-          No longer eligible for this role — choose someone else or keep as is
-        </p>
-      )}
-    </>
-  );
-}
-
-const KIND_LABEL = { public: "Public", online: "Online" };
-
-function KindTag({ kind }) {
-  return (
-    <span className="shrink-0 rounded-full bg-track px-1.5 py-0.5 text-[10px] font-semibold text-fg-muted">
-      {KIND_LABEL[kind] ?? kind}
-    </span>
-  );
-}
-
-function RelatedRow({ s, showKind }) {
-  return (
-    <span className="flex min-w-0 items-center gap-2">
-      <MsdbIcon url={s.iconUrl} code={s.code} name={s.name} />
-      <span className="min-w-0 truncate">{s.name}</span>
-      {showKind && <KindTag kind={s.kind} />}
-    </span>
-  );
-}
-
-/** MSDB-backed picker (read-only server search). `kinds` > 1 → segmented switch in the popover. */
-function RelatedPicker({ id, projectId, kinds, value, onChange, error, noun }) {
-  const [kind, setKind] = useState(value?.kind && kinds.includes(value.kind) ? value.kind : kinds[0]);
-  const header =
-    kinds.length > 1 ? (
-      <div role="group" aria-label={`${noun} type`} className="inline-flex gap-0.5 rounded-full bg-card-inset p-0.5">
-        {kinds.map((k) => (
-          <button
-            key={k}
-            type="button"
-            aria-pressed={kind === k}
-            onClick={() => setKind(k)}
-            className={`min-h-8 rounded-full px-3 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-brand-500 ${
-              kind === k ? "bg-brand-500 text-navy" : "text-fg-muted hover:text-fg"
-            }`}
-          >
-            {KIND_LABEL[k]}
-          </button>
-        ))}
-      </div>
-    ) : null;
-
-  return (
-    <Combobox
-      id={id}
-      value={value}
-      onChange={onChange}
-      search={(q) => searchRelatedAction(projectId, kind, q)}
-      searchKey={kind}
-      header={header}
-      getLabel={(s) => s.name}
-      renderOption={(s) => <RelatedRow s={s} />}
-      renderChip={(s) => <RelatedRow s={s} showKind={kinds.length > 1} />}
-      placeholder={`Search ${noun.toLowerCase()}s`}
-      emptyText={`No matching ${noun.toLowerCase()}s`}
-      listLabel={`${noun}s`}
-      invalid={!!error}
-      describedBy={`${id}-error`}
-    />
   );
 }
 
@@ -277,39 +165,14 @@ export default function ClipDetailsStep({ values, setField, errors, projectId, o
       </Section>
 
       <Section id="sec-related" title="Related" subtitle="Link this task to a course, program or skill.">
-        <Field id="clip-course" title="Course" error={err("relatedCourse")}>
-          <RelatedPicker
-            id="clip-course"
-            projectId={projectId}
-            kinds={["public", "online"]}
-            value={values.relatedCourse}
-            onChange={(s) => setField("relatedCourse", s)}
-            error={err("relatedCourse")}
-            noun="Course"
-          />
-        </Field>
-        <Field id="clip-program" title="Program" error={err("relatedProgram")}>
-          <RelatedPicker
-            id="clip-program"
-            projectId={projectId}
-            kinds={["program"]}
-            value={values.relatedProgram}
-            onChange={(s) => setField("relatedProgram", s)}
-            error={err("relatedProgram")}
-            noun="Program"
-          />
-        </Field>
-        <Field id="clip-skill" title="Skill" error={err("relatedSkill")}>
-          <RelatedPicker
-            id="clip-skill"
-            projectId={projectId}
-            kinds={["skill"]}
-            value={values.relatedSkill}
-            onChange={(s) => setField("relatedSkill", s)}
-            error={err("relatedSkill")}
-            noun="Skill"
-          />
-        </Field>
+        <RelatedPicker
+          id="clip-related"
+          projectId={projectId}
+          value={values.related}
+          onChange={(s) => setField("related", s)}
+          error={err("related")}
+          legacyNote={!!values.relatedHadMultiple}
+        />
       </Section>
 
       <Section id="sec-work" title="Work & Assign" subtitle="Set the difficulty and who does the work.">

@@ -29,7 +29,8 @@ const TaskSchema = new mongoose.Schema(
     description: { type: String, trim: true, maxlength: TASK_DESCRIPTION_MAX, default: "" },
     // Type-specific fields, validated per type by lib/tasks/details.js (clip:
     // videoType, platforms, fileLocation, editingRequirements, referenceUrl,
-    // relatedCourse / relatedProgram / relatedSkill snapshots, workLevel,
+    // related (ONE item, lib/tasks/related.js; legacy tasks may still hold
+    // relatedCourse / relatedProgram / relatedSkill until next saved), workLevel,
     // contentReviewer, videoReviewer). {} = no details yet.
     details: { type: mongoose.Schema.Types.Mixed, default: {} },
     createdBy: { type: ObjectId, ref: "User", required: true },

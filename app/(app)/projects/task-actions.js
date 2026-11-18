@@ -26,7 +26,7 @@ import {
 import { recomputeRollups } from "@/lib/projects/progress";
 import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
-import { searchCourses, searchPrograms, searchSkills } from "@/lib/msdb";
+import { searchRelated } from "@/lib/msdb";
 import { parseTaskDetails } from "@/lib/tasks/details";
 import {
   hasAssetStatus,
@@ -205,22 +205,16 @@ export async function deleteTaskAction(formData) {
 }
 
 /**
- * Related pickers (Step 2): READ-ONLY MSDB search, max 20. Only for a signed-in
- * viewer who can see the project. kind: "public" | "online" | "program" | "skill".
+ * Related picker (Step 2): search the MSDB mirror, max 20. Only for a signed-in
+ * viewer who can see the project. type: "course" (public + online) | "program" | "skill".
  */
-export async function searchRelatedAction(projectId, kind, q) {
+export async function searchRelatedAction(projectId, type, q) {
   const viewer = await getProjectViewer();
   if (!viewer) return fail(SIGNED_OUT);
   const project = await findViewableProject(viewer, str(projectId));
   if (!project || !canView(viewer, project)) return fail(PROJECT_NOT_FOUND);
-  const term = str(q);
   try {
-    const results =
-      kind === "program"
-        ? await searchPrograms(term)
-        : kind === "skill"
-          ? await searchSkills(term)
-          : await searchCourses({ q: term, kind: str(kind) });
+    const results = await searchRelated({ type: str(type), q: str(q) });
     return { ok: true, results };
   } catch {
     return fail("Search is unavailable right now.");

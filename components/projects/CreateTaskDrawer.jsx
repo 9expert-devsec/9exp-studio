@@ -92,6 +92,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
       const payload = { ...details };
       delete payload.__type;
       delete payload.hasDetails;
+      delete payload.relatedHadMultiple;
       fd.set("withDetails", "1");
       fd.set("details", JSON.stringify(payload));
     }

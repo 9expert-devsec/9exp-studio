@@ -7,6 +7,10 @@
 //     "" on open too, so the first results show before typing.
 //   - single (value: option | null) or multiple (value: option[]); the chosen
 //     option(s) render as chips under the input, each with a × to remove.
+//   - single + `renderValue`: once picked, the search input is REPLACED by one
+//     full-width row (same height as the input) rendering the value, with a ×
+//     ("Remove <label>") that clears it and brings the search back, focused.
+//     `labelledBy` names that row (the field label's id).
 //   - `header`: optional content at the top of the popover (e.g. Public | Online);
 //     `searchKey` re-runs the search when it changes.
 // Keyboard: ↓/↑ move (↓ opens), Enter picks, Escape closes. Focus moving into the
@@ -30,6 +34,8 @@ export default function Combobox({
   getLabel = (o) => o.label,
   renderOption,
   renderChip,
+  renderValue,
+  labelledBy,
   placeholder = "Search…",
   leadingIcon: Leading = Search,
   header,
@@ -44,6 +50,16 @@ export default function Combobox({
   const [remote, setRemote] = useState({ results: [], loading: false, error: "" });
   const requestRef = useRef(0);
   const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+  const refocusRef = useRef(false);
+
+  // After × clears a single value, the search input comes back: focus it.
+  useEffect(() => {
+    if (!value && refocusRef.current) {
+      refocusRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [value]);
   const listId = useId();
   const statusId = useId();
 
@@ -107,6 +123,40 @@ export default function Combobox({
   const optionId = (i) => `${listId}-opt-${i}`;
   const label = (o) => (renderOption ? renderOption(o) : getLabel(o));
 
+  // Single + renderValue + a value: the input is replaced by the value row.
+  const showValueRow = !multiple && !!value && typeof renderValue === "function";
+
+  const clearValue = () => {
+    refocusRef.current = true;
+    setQuery("");
+    setActive(-1);
+    onChange(null);
+  };
+
+  if (showValueRow) {
+    return (
+      <div
+        role="group"
+        aria-labelledby={labelledBy}
+        aria-describedby={describedBy}
+        className={`flex min-h-11 w-full items-center gap-2.5 rounded-[10px] border bg-card py-1.5 pl-3 pr-1.5 text-sm text-fg ${
+          invalid ? "border-danger" : "border-line"
+        }`}
+      >
+        <span className="flex min-w-0 flex-1 items-center gap-2.5">{renderValue(value)}</span>
+        <button
+          id={id}
+          type="button"
+          onClick={clearValue}
+          aria-label={`Remove ${getLabel(value)}`}
+          className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-fg-muted transition-colors hover:bg-card-inset hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+        >
+          <X className="size-4" aria-hidden="true" />
+        </button>
+      </div>
+    );
+  }
+
   return (
     // relative: keeps the sr-only status line (position:absolute) inside this
     // component instead of escaping to the nearest positioned ancestor.
@@ -120,6 +170,7 @@ export default function Combobox({
       >
         <Leading className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
         <input
+          ref={inputRef}
           id={id}
           type="text"
           role="combobox"
@@ -180,7 +231,7 @@ export default function Combobox({
         {open && !loading ? `${results.length} ${results.length === 1 ? "result" : "results"}` : ""}
       </p>
 
-      {selected.length > 0 && (
+      {selected.length > 0 && !renderValue && (
         <ul className="flex flex-wrap gap-2" aria-label="Selected">
           {selected.map((o) => (
             <li key={getKey(o)} className="flex max-w-full items-center gap-2 rounded-full border border-line bg-card-inset py-1 pl-2 pr-1.5">

@@ -15,6 +15,10 @@ const MsdbRefSchema = new mongoose.Schema(
     // Courses: their program's icon (online: else their own image). Absolute URL or null.
     iconUrl: { type: String, default: null },
     programMsdbId: { type: String, default: null }, // courses only
+    // Public courses only: in-house-only (MSDB course_type_public: false). Shown
+    // with an "In-house" badge; still active.
+    isInhouse: { type: Boolean, default: false },
+    // false = missing from the last successful MSDB sync (never "in-house").
     active: { type: Boolean, default: true },
     searchText: { type: String, default: "" }, // lower-cased "code name"
     syncedAt: { type: Date, required: true },
