@@ -31,8 +31,13 @@ const TaskSchema = new mongoose.Schema(
     // videoType, platforms, fileLocation, editingRequirements, referenceUrl,
     // related (ONE item, lib/tasks/related.js; legacy tasks may still hold
     // relatedCourse / relatedProgram / relatedSkill until next saved), workLevel,
-    // contentReviewer, videoReviewer). {} = no details yet.
+    // contentReviewer, videoReviewer; graphic: platform, workType, items,
+    // fileLocation, photos[{ url, publicId, width, height }], brief, referenceUrl,
+    // related, workLevel, contentReviewer, designReviewer). {} = no details yet.
     details: { type: mongoose.Schema.Types.Mixed, default: {} },
+    // Folder ID "YYMM-NNN<suffix>" (lib/tasks/folderId.js), issued once on the
+    // server at creation for types that have a suffix (graphic → G); immutable.
+    folderId: { type: String, default: undefined, immutable: true },
     createdBy: { type: ObjectId, ref: "User", required: true },
   },
   { timestamps: true, collection: "tasks", minimize: false }
@@ -40,6 +45,8 @@ const TaskSchema = new mongoose.Schema(
 
 TaskSchema.index({ content: 1, number: 1 }, { unique: true });
 TaskSchema.index({ content: 1, updatedAt: -1 });
+// Unique among tasks that have one (sparse: most types have no Folder ID).
+TaskSchema.index({ folderId: 1 }, { unique: true, sparse: true });
 
 const Task = mongoose.models.Task || mongoose.model("Task", TaskSchema);
 

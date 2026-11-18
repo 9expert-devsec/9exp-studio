@@ -27,7 +27,9 @@ import { recomputeRollups } from "@/lib/projects/progress";
 import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { searchRelated } from "@/lib/msdb";
-import { parseTaskDetails } from "@/lib/tasks/details";
+import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
+import { issueFolderId } from "@/lib/tasks/folderCounter";
+import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
 import {
   hasAssetStatus,
   initialAssetStatus,
@@ -58,9 +60,14 @@ async function loadScope(formData) {
 }
 
 /** Step 2 was submitted: validate details for `type` (or { skip: true }). */
-async function readDetails(formData, type, project, existing) {
+async function readDetails(formData, type, project, existing, viewer) {
   if (str(formData.get("withDetails")) !== "1") return { skip: true };
-  return parseTaskDetails(type, formData.get("details"), { project, existing });
+  return parseTaskDetails(type, formData.get("details"), { project, existing, viewerId: String(viewer.id) });
+}
+
+/** Best-effort Cloudinary cleanup (never blocks or fails the action). */
+async function deletePhotos(publicIds) {
+  await Promise.all(publicIds.map((id) => deleteTaskPhoto(id)));
 }
 
 /**
@@ -86,11 +93,16 @@ export async function createTaskAction(formData) {
   const status = initialStatus(type);
   if (!isValidStatus(type, status)) return fail(CHECK_FIELDS, { type: "This task type isn't available yet." });
 
-  const extra = await readDetails(formData, type, project, null);
+  const extra = await readDetails(formData, type, project, null, viewer);
   if (extra.errors) return fail(CHECK_FIELDS, extra.errors);
   const more = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
 
+  // Folder ID (graphic → "YYMM-NNNG"), issued here on the server only. If the
+  // insert below fails, the number is skipped, never reused.
+  const folderId = await issueFolderId(type);
+
   const task = await createNumbered(TASK_SEQ, content._id, {
+    ...(folderId ? { folderId } : {}),
     project: project._id,
     content: content._id,
     title,
@@ -131,13 +143,17 @@ export async function updateTaskAction(formData) {
   }
 
   const parsedTitle = parseTaskTitle(formData);
-  const extra = await readDetails(formData, task.type, project, task);
+  const extra = await readDetails(formData, task.type, project, task, viewer);
   const errors = { ...(parsedTitle.error ? { title: parsedTitle.error } : {}), ...(extra.errors ?? {}) };
   if (Object.keys(errors).length) return fail(CHECK_FIELDS, errors);
 
   const set = { title: parsedTitle.title };
   if (extra.values) Object.assign(set, extra.values);
   await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: set });
+
+  // Photos removed in the form are deleted from Cloudinary only now, after the
+  // save (so Cancel never loses a saved photo).
+  if (extra.values) await deletePhotos(removedPhotoIds(task.details, extra.values.details));
 
   refresh();
   return { ok: true };
@@ -198,9 +214,44 @@ export async function deleteTaskAction(formData) {
   // Record the counter first so this task's number can never be handed out again.
   await ensureSeq(TASK_SEQ, content._id);
   await Task.deleteOne({ _id: task._id, content: content._id, project: project._id });
+  await deletePhotos(removedPhotoIds(task.details, {}));
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
+  return { ok: true };
+}
+
+/**
+ * Graphic photos: signed params for ONE direct browser upload to Cloudinary
+ * (lib/cloudinary.js). Only for a viewer who may create or edit tasks in this
+ * project (open, viewable).
+ */
+export async function signTaskPhotoUploadAction(projectId) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  const project = await findViewableProject(viewer, str(projectId));
+  if (!project || !canView(viewer, project)) return fail(PROJECT_NOT_FOUND);
+  if (project.status === "cancelled") return fail(PROJECT_CANCELLED);
+  try {
+    return { ok: true, ...signTaskPhotoUpload(String(viewer.id)) };
+  } catch {
+    return fail("Photo upload isn't available right now.");
+  }
+}
+
+/**
+ * Remove a photo the viewer just uploaded in the form (not yet saved on any
+ * task). Saved photos are deleted by the save/delete actions instead.
+ */
+export async function deleteUnsavedTaskPhotoAction(projectId, publicId) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  const project = await findViewableProject(viewer, str(projectId));
+  if (!project || !canView(viewer, project)) return fail(PROJECT_NOT_FOUND);
+  const id = str(publicId);
+  if (!isOwnTaskPhotoId(id, String(viewer.id))) return fail("That photo can't be removed.");
+  if (await Task.exists({ "details.photos.publicId": id })) return { ok: true }; // saved: the save handles it
+  await deleteTaskPhoto(id);
   return { ok: true };
 }
 

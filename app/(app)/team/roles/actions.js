@@ -43,8 +43,11 @@ function readRoleSettings(formData) {
   if (str(formData.get("permissionsMode")) === "limited") {
     set.permissions = pick("permissions", PERMISSION_KEYS);
     set.permissionsConfiguredAt = new Date();
+    // Every key the form showed is now configured for this role (lib/permissionRules.js).
+    set.permissionsKnown = PERMISSION_KEYS;
   } else {
     unset.permissions = 1;
+    unset.permissionsKnown = 1;
     set.permissionsConfiguredAt = null;
   }
   return { set, unset };

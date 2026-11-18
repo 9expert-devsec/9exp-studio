@@ -9,8 +9,8 @@
 // (lib/tasks/types.js); a type is selectable only if enabled AND in
 // `allowedTypes` (server canCreateTask per type). In edit mode the type is shown
 // but locked.
-// Step 2 · Task Detail (Figma node 126:2318): only for types listed in
-// drawer.detailTypes that have a client form here (clip). "Add details" is
+// Step 2 · Task Detail (Figma: clip 126:2318, graphic 148:1062): only for types
+// listed in drawer.detailTypes that have a client form here. "Add details" is
 // disabled ("Coming soon") for every other type. Back keeps all values.
 // Saving from Step 1 sends basics only; from Step 2 basics + details in ONE action
 // (create: one atomic insert). The server re-validates everything.
@@ -22,6 +22,7 @@ import { createTaskAction, updateTaskAction } from "@/app/(app)/projects/task-ac
 import { buttonClass } from "@/components/ui/Button";
 import Drawer, { useDrawerClose } from "@/components/ui/Drawer";
 import ClipDetailsStep, { emptyClipDetails } from "@/components/tasks/ClipDetailsStep";
+import GraphicDetailsStep, { emptyGraphicDetails } from "@/components/tasks/GraphicDetailsStep";
 import { TASK_TITLE_MAX } from "@/lib/projects/rules";
 import { getTaskType, taskTypes } from "@/lib/tasks/types";
 import { FieldError, input, label } from "./ProjectForm";
@@ -29,7 +30,10 @@ import { FieldError, input, label } from "./ProjectForm";
 const TITLE_ID = "create-task-title";
 
 /** Step 2 forms available on the client, keyed by type (server decides via detailTypes). */
-const DETAIL_FORMS = { clip: { Form: ClipDetailsStep, empty: emptyClipDetails } };
+const DETAIL_FORMS = {
+  clip: { Form: ClipDetailsStep, empty: emptyClipDetails },
+  graphic: { Form: GraphicDetailsStep, empty: emptyGraphicDetails },
+};
 
 /** Fields shown on Step 1 (a Step 2 save that fails on these goes back to Step 1). */
 const STEP1_FIELDS = ["title", "type"];
@@ -71,7 +75,9 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
   const [pending, startTransition] = useTransition();
 
   const detailForm = drawer.detailTypes.includes(type) ? DETAIL_FORMS[type] : null;
-  const setField = (field, value) => setDetails((d) => ({ ...d, [field]: value }));
+  // `value` may be an updater (cur → next), for fields that change asynchronously (photo uploads).
+  const setField = (field, value) =>
+    setDetails((d) => ({ ...d, [field]: typeof value === "function" ? value(d[field]) : value }));
 
   const goToDetails = () => {
     if (!detailForm) return;
@@ -93,6 +99,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
       delete payload.__type;
       delete payload.hasDetails;
       delete payload.relatedHadMultiple;
+      delete payload.folderId; // display only; issued by the server, never editable
       fd.set("withDetails", "1");
       fd.set("details", JSON.stringify(payload));
     }
@@ -175,6 +182,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
                 setField={setField}
                 errors={errors}
                 projectId={projectId}
+                isEdit={isEdit}
                 options={drawer.options}
                 people={drawer.people[type]}
               />

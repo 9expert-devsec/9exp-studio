@@ -7,8 +7,9 @@
 // reviewers) and option lists come from the server; the save re-validates all of
 // it (lib/tasks/details.js).
 
-import { CalendarDays, Clock, Link2, PlayCircle } from "lucide-react";
+import { PlayCircle } from "lucide-react";
 import Combobox from "@/components/ui/Combobox";
+import { DateTimeField, Field, ReferenceField, Section } from "@/components/tasks/DetailBlocks";
 import PersonPicker from "@/components/tasks/PersonPicker";
 import RelatedPicker from "@/components/tasks/RelatedPicker";
 import RichTextEditor from "@/components/ui/RichTextEditor";
@@ -35,30 +36,6 @@ export const emptyClipDetails = () => ({
   dueDate: "",
   dueTime: "",
 });
-
-function Section({ id, title, subtitle, children }) {
-  return (
-    <section aria-labelledby={id} className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
-      <h3 id={id} className="text-base font-bold text-fg">{title}</h3>
-      <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p>
-      <div className="my-4 h-px bg-line-subtle" />
-      <div className="flex flex-col gap-4">{children}</div>
-    </section>
-  );
-}
-
-function Field({ id, title, required, hint, error, children }) {
-  return (
-    <div>
-      <label htmlFor={id} id={`${id}-label`} className={label}>
-        {title} {required && <span className="text-danger" aria-hidden="true">*</span>}
-      </label>
-      {children}
-      {hint && <p className="mt-1.5 text-xs text-fg-muted">{hint}</p>}
-      <FieldError id={`${id}-error`} error={error} />
-    </div>
-  );
-}
 
 /**
  * @param {{ values: object, setField: (field: string, value: unknown) => void,
@@ -146,22 +123,12 @@ export default function ClipDetailsStep({ values, setField, errors, projectId, o
           />
           <FieldError id="clip-requirements-error" error={err("editingRequirements")} />
         </div>
-        <Field id="clip-reference" title="Reference (Optional)" error={err("referenceUrl")}>
-          <div className="relative">
-            <Link2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-            <input
-              id="clip-reference"
-              type="url"
-              inputMode="url"
-              placeholder="https://"
-              value={values.referenceUrl}
-              onChange={(e) => setField("referenceUrl", e.target.value)}
-              className={`${input} pl-9`}
-              aria-invalid={!!err("referenceUrl") || undefined}
-              aria-describedby="clip-reference-error"
-            />
-          </div>
-        </Field>
+        <ReferenceField
+          id="clip-reference"
+          value={values.referenceUrl}
+          onChange={(v) => setField("referenceUrl", v)}
+          error={err("referenceUrl")}
+        />
       </Section>
 
       <Section id="sec-related" title="Related" subtitle="Link this task to a course, program or skill.">
@@ -257,42 +224,4 @@ export default function ClipDetailsStep({ values, setField, errors, projectId, o
   );
 }
 
-/** Native date (browser calendar popover) + time, Bangkok wall clock. */
-function DateTimeField({ id, title, date, time, min, onDate, onTime, error, hint }) {
-  return (
-    <fieldset aria-describedby={`${id}-hint ${id}-error`}>
-      <legend className={label}>{title}</legend>
-      <div className="grid grid-cols-[1fr_auto] gap-2">
-        <div className="relative">
-          <CalendarDays className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-          <input
-            id={`${id}-date`}
-            type="date"
-            aria-label={`${title}: date`}
-            value={date}
-            min={min || undefined}
-            onChange={(e) => onDate(e.target.value)}
-            className={`${input} pl-9`}
-            aria-invalid={!!error || undefined}
-          />
-        </div>
-        <div className="relative">
-          <Clock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-          <input
-            id={`${id}-time`}
-            type="time"
-            aria-label={`${title}: time`}
-            value={time}
-            disabled={!date}
-            onChange={(e) => onTime(e.target.value)}
-            className={`${input} w-32 pl-9`}
-            aria-invalid={!!error || undefined}
-          />
-        </div>
-      </div>
-      <p id={`${id}-hint`} className="mt-1.5 text-xs text-fg-muted">{hint}</p>
-      <FieldError id={`${id}-error`} error={error} />
-    </fieldset>
-  );
-}
 

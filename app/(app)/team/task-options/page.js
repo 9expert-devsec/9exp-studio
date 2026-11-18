@@ -7,6 +7,8 @@ import Task from "@/models/Task";
 import TaskOption from "@/models/TaskOption";
 import { readMsdbSyncState } from "@/lib/msdbSync";
 import { formatUpdatedAt } from "@/lib/projects/format";
+import { loadFolderIdPanel } from "@/lib/tasks/folderCounter";
+import FolderIdPanel from "./FolderIdPanel";
 import MsdbSyncPanel from "./MsdbSyncPanel";
 import TaskOptionsManager from "./TaskOptionsManager";
 
@@ -31,7 +33,7 @@ async function TaskOptionsData({ searchParams }) {
   const sp = await searchParams;
   const listKey = TASK_OPTION_LISTS.some((l) => l.key === sp?.list) ? sp.list : TASK_OPTION_LISTS[0].key;
 
-  const [options, usage, syncState] = await Promise.all([
+  const [options, usage, syncState, folderIds] = await Promise.all([
     TaskOption.find().sort({ order: 1, label: 1 }).lean(),
     // How many tasks reference each option (blocks delete).
     Task.aggregate([
@@ -41,6 +43,7 @@ async function TaskOptionsData({ searchParams }) {
       { $group: { _id: "$ids", n: { $sum: 1 } } },
     ]),
     readMsdbSyncState(),
+    loadFolderIdPanel(),
   ]);
   const usedBy = new Map(usage.map((u) => [String(u._id), u.n]));
 
@@ -80,6 +83,7 @@ async function TaskOptionsData({ searchParams }) {
         options={lists}
         marks={PLATFORM_MARKS.map(({ key, label }) => ({ key, label }))}
       />
+      <FolderIdPanel rows={folderIds} />
       <MsdbSyncPanel status={syncStatusView(syncState)} />
     </div>
   );

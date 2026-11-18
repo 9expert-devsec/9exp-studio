@@ -9,6 +9,7 @@
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
 import { syncMsdbRefs } from "@/lib/msdbSync";
+import { setNextFolderNumber } from "@/lib/tasks/folderCounter";
 import { escapeRegex } from "@/lib/projects/rules";
 import { authorizeSuperadmin } from "@/lib/team";
 import { PLATFORM_MARK_KEYS, TASK_OPTION_LABEL_MAX, WORK_TYPE_PLATFORMS_MAX, getOptionList } from "@/lib/tasks/options";
@@ -171,6 +172,22 @@ export async function deleteTaskOptionAction(formData) {
   await TaskOption.deleteOne({ _id: option._id });
   refresh();
   return { ok: true };
+}
+
+/**
+ * Folder ID "next number" for the current Bangkok month + one issuing suffix
+ * (lib/tasks/folderCounter.js). Rejects a number the system already issued.
+ */
+export async function setNextFolderNumberAction(formData) {
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
+
+  const raw = str(formData.get("next")).trim();
+  const next = /^\d{1,6}$/.test(raw) ? Number(raw) : NaN;
+  const res = await setNextFolderNumber(str(formData.get("suffix")), next);
+  if (!res.ok) return fail(res.error);
+  refresh();
+  return { ok: true, nextId: res.nextId };
 }
 
 /** "Sync now": refresh the MSDB mirror (Related pickers) from the MSDB API. */

@@ -33,6 +33,11 @@ const RoleSchema = new mongoose.Schema(
     // saves it, and cleared (with the array) when it is set back to unconfigured.
     permissions: { type: [String], default: undefined },
     permissionsConfiguredAt: { type: Date, default: null },
+    // Which permission keys the Roles form showed when it saved `permissions`
+    // (review_content, review_video, review_design, …). A key missing here was
+    // never configured for this role → allowed. Absent on roles saved before it
+    // existed (they knew review_content + review_video). lib/permissionRules.js.
+    permissionsKnown: { type: [String], default: undefined },
   },
   { timestamps: true, collection: "roles" }
 );
