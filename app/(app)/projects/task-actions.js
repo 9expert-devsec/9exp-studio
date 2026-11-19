@@ -19,6 +19,7 @@ import {
   canEditTask,
   canReorderTasks,
   canView,
+  taskReadAccess,
   findContentTask,
   findProjectContent,
   findViewableProject,
@@ -323,7 +324,9 @@ export async function deleteUnsavedTaskPhotoAction(projectId, publicId) {
 
 /**
  * Task Detail → Activity: one more page (or a new filter) of a task's activity.
- * Only for a viewer who can see that task's project.
+ * Same read rule as the panel (access.js taskReadAccess): the task's project is
+ * visible, or the task is a Related Asset of a Post/Article in a visible project
+ * (read-only). Reading only — no write is allowed here.
  * @param {string} taskId @param {string} filter all|status|edits|people|assets
  * @param {{ at: string, id: string } | null} cursor
  */
@@ -334,8 +337,7 @@ export async function loadTaskActivityAction(taskId, filter, cursor) {
   if (!/^[a-f0-9]{24}$/i.test(id)) return fail(TASK_NOT_FOUND);
   const task = await Task.findById(id).select("type project").lean();
   if (!task) return fail(TASK_NOT_FOUND);
-  const project = await findViewableProject(viewer, task.project.toString());
-  if (!project || !canView(viewer, project)) return fail(TASK_NOT_FOUND);
+  if ((await taskReadAccess(viewer, task)).mode === "none") return fail(TASK_NOT_FOUND);
   const page = await loadActivityPage(task, {
     filter: str(filter),
     cursor: cursor && typeof cursor === "object" ? { at: str(cursor.at), id: str(cursor.id) } : null,

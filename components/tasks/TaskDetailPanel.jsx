@@ -5,6 +5,11 @@
 // URL (the page reads searchParams and passes `panel`); closing (×, Escape,
 // backdrop, Back) replaces the URL with `closeHref`.
 //
+// Read-only mode (`panel.readOnly`, round 34): a Related Asset opened from another
+// project the viewer isn't a member of — no ⋯ menu / Edit / status dropdown,
+// Project + Content as plain text, a "View only" note. The server decides
+// (lib/projects/access.js taskReadAccess); the write actions re-check anyway.
+//
 // Left column: type + ID chips, title, description, the info rows that apply to
 // the task's type. Right column: Status & Progress (stepper, current status with
 // an inline change, Post asset status, progress) and the tabs — Activity is live;
@@ -23,6 +28,7 @@ import {
   Clock,
   Copy,
   ExternalLink,
+  Eye,
   FileText,
   Filter,
   FolderKanban,
@@ -122,7 +128,7 @@ function PanelBody({ panel }) {
   return (
     <>
       <Header>
-        <TaskMenu task={panel.menuTask} onDeleted={close} />
+        {panel.menuTask && <TaskMenu task={panel.menuTask} onDeleted={close} />}
         {panel.editHref && (
           <Link href={panel.editHref} scroll={false} className={buttonClass("primary", "min-h-10")}>
             <Pencil className="size-4" aria-hidden="true" />
@@ -130,6 +136,13 @@ function PanelBody({ panel }) {
           </Link>
         )}
       </Header>
+      {panel.readOnly && (
+        // Opened as a Related Asset from a project the viewer belongs to.
+        <p className="flex shrink-0 items-center gap-2 border-b border-line-subtle px-4 py-2 text-xs text-fg-muted sm:px-6">
+          <Eye className="size-3.5 shrink-0" aria-hidden="true" />
+          View only — you&apos;re not a member of this project.
+        </p>
+      )}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card-inset/40 p-3 sm:p-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-4 lg:overflow-hidden">
         <div className="relative min-h-0 lg:overflow-y-auto lg:overscroll-contain">
           <InfoColumn panel={panel} />
@@ -176,6 +189,16 @@ function Row({ icon: Icon, label, children }) {
       </dt>
       <dd className="min-w-0 break-words text-fg">{children}</dd>
     </div>
+  );
+}
+
+/** A link when there's an href; plain text otherwise (read-only viewers). */
+function MaybeLink({ href, children }) {
+  if (!href) return <span>{children}</span>;
+  return (
+    <Link href={href} className="rounded hover:text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
+      {children}
+    </Link>
   );
 }
 
@@ -227,14 +250,10 @@ function InfoColumn({ panel }) {
 
       <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
         <Row icon={FolderKanban} label="Project">
-          <Link href={panel.project.href} className="rounded hover:text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
-            {panel.project.name}
-          </Link>
+          <MaybeLink href={panel.project.href}>{panel.project.name}</MaybeLink>
         </Row>
         <Row icon={FileText} label="Content">
-          <Link href={panel.content.href} className="rounded hover:text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
-            {panel.content.name}
-          </Link>
+          <MaybeLink href={panel.content.href}>{panel.content.name}</MaybeLink>
         </Row>
         {panel.platform && (
           <Row icon={MonitorSmartphone} label="Platform">
