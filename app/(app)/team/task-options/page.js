@@ -37,7 +37,18 @@ async function TaskOptionsData({ searchParams }) {
     TaskOption.find().sort({ order: 1, label: 1 }).lean(),
     // How many tasks reference each option (blocks delete).
     Task.aggregate([
-      { $project: { ids: { $concatArrays: [["$details.videoType"], { $ifNull: ["$details.platforms", []] }] } } },
+      // Every option field a task can hold: clip videoType/platforms, graphic/post
+      // platform/workType, article articleType.
+      {
+        $project: {
+          ids: {
+            $concatArrays: [
+              ["$details.videoType", "$details.platform", "$details.workType", "$details.articleType"],
+              { $ifNull: ["$details.platforms", []] },
+            ],
+          },
+        },
+      },
       { $unwind: "$ids" },
       { $match: { ids: { $ne: null } } },
       { $group: { _id: "$ids", n: { $sum: 1 } } },

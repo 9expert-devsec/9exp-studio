@@ -163,7 +163,15 @@ export async function deleteTaskOptionAction(formData) {
     const linked = await TaskOption.countDocuments({ list: "work_type", platforms: option._id });
     if (linked > 0) return fail(linkedMessage(linked));
   }
-  const used = await Task.countDocuments({ $or: [{ "details.videoType": option._id }, { "details.platforms": option._id }] });
+  const used = await Task.countDocuments({
+    $or: [
+      { "details.videoType": option._id },
+      { "details.platforms": option._id },
+      { "details.platform": option._id },
+      { "details.workType": option._id },
+      { "details.articleType": option._id },
+    ],
+  });
   if (used > 0) {
     return fail(
       `${used} task${used === 1 ? " uses" : "s use"} “${option.label}”, so it can't be deleted. Deactivate it instead — it will leave the pickers but stay on those tasks.`
