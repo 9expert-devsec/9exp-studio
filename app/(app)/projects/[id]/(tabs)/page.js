@@ -4,8 +4,9 @@ import ContentToolbar from "@/components/projects/ContentToolbar";
 import { ContentCard, NoContent, NoContentMatches } from "@/components/projects/ContentViews";
 import SortableBoard from "@/components/projects/SortableBoard";
 import { ContentListSkeleton } from "@/components/projects/Skeletons";
-import { parseContentFilters } from "@/lib/projects/filters";
-import { loadContentList, loadProjectContext } from "@/lib/projects/queries";
+import TaskDetailPanel from "@/components/tasks/TaskDetailPanel";
+import { contentFiltersQuery, parseContentFilters } from "@/lib/projects/filters";
+import { loadContentList, loadProjectContext, loadTaskPanel } from "@/lib/projects/queries";
 
 export const metadata = {
   title: "Project · 9Expert Studio",
@@ -27,9 +28,17 @@ async function ContentTab({ params, searchParams }) {
   if (!ctx) notFound();
 
   const filters = parseContentFilters(await searchParams);
-  const { total, items, canAdd, canReorder, reorderBlocked } = await loadContentList(ctx, filters);
+  const { total, items: loaded, canAdd, canReorder, reorderBlocked } = await loadContentList(ctx, filters);
   const href = `/projects/${ctx.project._id}`;
   const addHref = canAdd ? `${href}/content/new` : null;
+
+  // Task Detail panel (?task=<id>): task cards open it; hrefs keep the filters.
+  const taskHref = (taskId) => `${href}${contentFiltersQuery({ ...filters, task: taskId })}`;
+  const items = loaded.map((c) => ({
+    ...c,
+    stats: { ...c.stats, recentTasks: c.stats.recentTasks.map((t) => ({ ...t, openHref: taskHref(t.id) })) },
+  }));
+  const panel = filters.task ? await loadTaskPanel(ctx.viewer, filters.task, { taskHref }) : null;
 
   return (
     <section aria-labelledby="content-heading" className="flex flex-col gap-5">
@@ -62,6 +71,8 @@ async function ContentTab({ params, searchParams }) {
           blockedReason={reorderBlocked ? "Clear filters to reorder" : null}
         />
       )}
+
+      {filters.task && <TaskDetailPanel open panel={panel} closeHref={taskHref("")} />}
     </section>
   );
 }

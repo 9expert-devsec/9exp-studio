@@ -42,6 +42,9 @@ const TaskSchema = new mongoose.Schema(
     // server at creation for types that have a suffix (graphic → G); immutable.
     folderId: { type: String, default: undefined, immutable: true },
     createdBy: { type: ObjectId, ref: "User", required: true },
+    // Who made the last write (create / edit / status change / duplicate), from
+    // round 33 on; older tasks have none (Task Detail shows only the time).
+    updatedBy: { type: ObjectId, ref: "User", default: null },
   },
   { timestamps: true, collection: "tasks", minimize: false }
 );

@@ -537,7 +537,7 @@ function DeleteContentConfirm({ content, then, onDone }) {
  * server actions, which also recompute the content/project roll-ups and refresh in
  * place. Renders nothing when neither applies.
  */
-export function TaskMenu({ task }) {
+export function TaskMenu({ task, onDeleted }) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState(null);
   const [duplicating, startDuplicate] = useTransition();
@@ -580,7 +580,7 @@ export function TaskMenu({ task }) {
               title="Delete task?"
               description={`“${task.title}” will be permanently deleted. This can't be undone.`}
             >
-              <DeleteTaskConfirm task={task} onDone={close} />
+              <DeleteTaskConfirm task={task} onDone={close} onDeleted={onDeleted} />
             </Modal>
           )}
         </>
@@ -708,7 +708,7 @@ function ChangeTaskStatusForm({ task, onDone }) {
   );
 }
 
-function DeleteTaskConfirm({ task, onDone }) {
+function DeleteTaskConfirm({ task, onDone, onDeleted }) {
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -720,8 +720,10 @@ function DeleteTaskConfirm({ task, onDone }) {
     fd.set("taskId", task.id);
     startTransition(async () => {
       const res = await deleteTaskAction(fd);
-      if (res?.ok) onDone();
-      else setError(res?.error ?? "Something went wrong.");
+      if (res?.ok) {
+        onDone();
+        onDeleted?.(); // e.g. the Task Detail panel closes itself
+      } else setError(res?.error ?? "Something went wrong.");
     });
   };
 

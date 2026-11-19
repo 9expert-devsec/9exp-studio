@@ -22,7 +22,14 @@ const DrawerClose = createContext(() => {});
 /** Inside a <Drawer>: a function that closes it (same path as Escape). */
 export const useDrawerClose = () => use(DrawerClose);
 
-export default function Drawer({ open, onClose, labelledBy, returnFocusId, children }) {
+// Widths: "default" = the task form drawer (520px); "wide" = Task Detail (75% of
+// the viewport from xl, full screen below). Static classes (no interpolation).
+const SIZE = {
+  default: "w-full sm:max-w-[520px]",
+  wide: "w-full xl:w-[75vw]",
+};
+
+export default function Drawer({ open, onClose, labelledBy, returnFocusId, size = "default", closeOnBackdrop = false, children }) {
   const ref = useRef(null);
 
   useEffect(() => {
@@ -62,10 +69,13 @@ export default function Drawer({ open, onClose, labelledBy, returnFocusId, child
         if (open) onClose?.();
         if (returnFocusId) document.getElementById(returnFocusId)?.focus();
       }}
+      // The content fills the dialog box, so a click whose target is the <dialog>
+      // itself landed on the backdrop.
+      onClick={closeOnBackdrop ? (e) => e.target === e.currentTarget && requestClose() : undefined}
       // overflow-hidden: the <dialog> itself never scrolls (the UA default is
       // overflow:auto). Only the caller's body region scrolls, so there is exactly
       // one scrollbar and the footer stays pinned at the bottom.
-      className="fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none w-full max-w-none overflow-hidden border-l border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 sm:max-w-[520px]"
+      className={`fixed inset-y-0 right-0 left-auto m-0 h-dvh max-h-none max-w-none overflow-hidden border-l border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50 ${SIZE[size] ?? SIZE.default}`}
     >
       {open && (
         <DrawerClose value={requestClose}>

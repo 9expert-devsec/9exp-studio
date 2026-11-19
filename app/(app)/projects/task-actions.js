@@ -29,6 +29,7 @@ import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
 import { buildTaskCopy } from "@/lib/tasks/duplicate";
+import { deleteActivity, editEntries, loadActivityPage, logActivity } from "@/lib/tasks/activity";
 import { searchRelated } from "@/lib/msdb";
 import { escapeRegex } from "@/lib/projects/rules";
 import { assetRows } from "@/lib/tasks/assetRows";
@@ -120,8 +121,10 @@ export async function createTaskAction(formData) {
     dueAt: more.dueAt,
     details: more.details,
     createdBy: viewer.id,
+    updatedBy: viewer.id,
   });
   if (!task) return fail("Could not number this task — please try again.");
+  await logActivity({ task: task._id, project: project._id, actor: viewer.id, type: "created", data: {} });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -155,7 +158,10 @@ export async function updateTaskAction(formData) {
 
   const set = { title: parsedTitle.title };
   if (extra.values) Object.assign(set, extra.values);
-  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: set });
+  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { ...set, updatedBy: viewer.id } });
+
+  // Activity: what actually changed (nothing → no entry).
+  await logActivity(editEntries(task, { ...task, ...set }, { actor: viewer.id }));
 
   // Photos removed in the form are deleted from Cloudinary only now, after the
   // save (so Cancel never loses a saved photo).
@@ -188,7 +194,9 @@ export async function changeTaskStatusAction(formData) {
   const status = str(formData.get("status"));
   if (!isValidStatus(task.type, status)) return fail("Choose a status for this task type.");
 
-  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { status } });
+  if (status === task.status) return { ok: true };
+  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { status, updatedBy: viewer.id } });
+  await logActivity({ task: task._id, project: project._id, actor: viewer.id, type: "status_changed", data: { from: task.status, to: status } });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -215,6 +223,7 @@ export async function deleteTaskAction(formData) {
   await ensureSeq(TASK_SEQ, content._id);
   await Task.deleteOne({ _id: task._id, content: content._id, project: project._id });
   await deletePhotos(removedPhotoIds(task.details, {}));
+  await deleteActivity([task._id]);
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -266,6 +275,7 @@ export async function duplicateTaskAction(formData) {
   const folderId = await issueFolderId(task.type);
   const copy = await createNumbered(TASK_SEQ, content._id, buildTaskCopy(task, { createdBy: viewer.id, folderId }));
   if (!copy) return fail("Could not number this task — please try again.");
+  await logActivity({ task: copy._id, project: project._id, actor: viewer.id, type: "created", data: { duplicatedFrom: task.title } });
 
   // Right after the original: (re)write the whole content's order.
   const ordered = sortByOrder(await siblingTasks(project, content)).map((t) => t._id.toString());
@@ -309,6 +319,28 @@ export async function deleteUnsavedTaskPhotoAction(projectId, publicId) {
   if (await Task.exists({ "details.photos.publicId": id })) return { ok: true }; // saved: the save handles it
   await deleteTaskPhoto(id);
   return { ok: true };
+}
+
+/**
+ * Task Detail → Activity: one more page (or a new filter) of a task's activity.
+ * Only for a viewer who can see that task's project.
+ * @param {string} taskId @param {string} filter all|status|edits|people|assets
+ * @param {{ at: string, id: string } | null} cursor
+ */
+export async function loadTaskActivityAction(taskId, filter, cursor) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  const id = str(taskId);
+  if (!/^[a-f0-9]{24}$/i.test(id)) return fail(TASK_NOT_FOUND);
+  const task = await Task.findById(id).select("type project").lean();
+  if (!task) return fail(TASK_NOT_FOUND);
+  const project = await findViewableProject(viewer, task.project.toString());
+  if (!project || !canView(viewer, project)) return fail(TASK_NOT_FOUND);
+  const page = await loadActivityPage(task, {
+    filter: str(filter),
+    cursor: cursor && typeof cursor === "object" ? { at: str(cursor.at), id: str(cursor.id) } : null,
+  });
+  return { ok: true, ...page };
 }
 
 /**

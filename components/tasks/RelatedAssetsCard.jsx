@@ -27,8 +27,8 @@ function TypeTile({ type }) {
   );
 }
 
-/** One asset row (selected list + picker results): tile · "<Folder ID> <title>" · "Project · Assignee" · status. */
-function AssetRow({ a }) {
+/** One asset row (selected list, picker results, Task Detail): tile · "<Folder ID> <title>" · "Project · Assignee" · status. */
+export function AssetRow({ a }) {
   return (
     <>
       <TypeTile type={a.type} />

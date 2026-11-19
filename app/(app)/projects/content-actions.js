@@ -26,6 +26,7 @@ import { recomputeRollups } from "@/lib/projects/progress";
 import { CONTENT_SEQ, createNumbered, ensureSeq, nextSeq } from "@/lib/projects/sequence";
 import { parseContentForm } from "@/lib/projects/validate";
 import { buildContentCopy, buildTaskCopy } from "@/lib/tasks/duplicate";
+import { deleteActivity, logActivity } from "@/lib/tasks/activity";
 import { issueFolderId } from "@/lib/tasks/folderCounter";
 import { getTaskType } from "@/lib/tasks/types";
 import Content from "@/models/Content";
@@ -101,6 +102,7 @@ export async function duplicateContentAction(formData) {
 
   const session = await mongoose.startSession();
   let newId = null;
+  let copies = [];
   try {
     await session.withTransaction(async () => {
       const [created] = await Content.create(
@@ -109,7 +111,7 @@ export async function duplicateContentAction(formData) {
       );
       newId = created._id;
       if (tasks.length) {
-        await Task.insertMany(
+        copies = await Task.insertMany(
           tasks.map((t, i) => ({
             ...buildTaskCopy(t, { createdBy: viewer.id, content: created._id, folderId: folderIds[i] }),
             number: i + 1,
@@ -128,6 +130,17 @@ export async function duplicateContentAction(formData) {
   } finally {
     await session.endSession();
   }
+
+  // Activity (after the commit): each copied task was "created … duplicated from".
+  await logActivity(
+    copies.map((c, i) => ({
+      task: c._id,
+      project: project._id,
+      actor: viewer.id,
+      type: "created",
+      data: { duplicatedFrom: tasks[i].title },
+    }))
+  );
 
   await recomputeRollups({ projectId: project._id, contentId: newId });
   refresh();
@@ -210,7 +223,9 @@ export async function deleteContentAction(formData) {
   // Cascade: its tasks first, then the item, then re-derive the project's status.
   // (Not a transaction: a failure between the two deletes leaves an item with
   // fewer tasks, never orphaned tasks.)
+  const taskIds = (await Task.find({ content: content._id, project: project._id }).select("_id").lean()).map((t) => t._id);
   await Task.deleteMany({ content: content._id, project: project._id });
+  await deleteActivity(taskIds);
   await Content.deleteOne({ _id: content._id, project: project._id });
   await recomputeRollups({ projectId: project._id });
 

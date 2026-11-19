@@ -5,8 +5,9 @@ import { ArrowLeft, ChevronRight } from "lucide-react";
 import { ContentSummaryCard, TasksSection } from "@/components/projects/ContentViews";
 import { ContentListSkeleton } from "@/components/projects/Skeletons";
 import { buttonClass } from "@/components/ui/Button";
-import { parseTaskFilters } from "@/lib/projects/filters";
-import { loadContentDetail, loadProjectContext } from "@/lib/projects/queries";
+import TaskDetailPanel from "@/components/tasks/TaskDetailPanel";
+import { parseTaskFilters, taskFiltersQuery } from "@/lib/projects/filters";
+import { loadContentDetail, loadProjectContext, loadTaskPanel } from "@/lib/projects/queries";
 
 export const metadata = {
   title: "Content · 9Expert Studio",
@@ -33,6 +34,10 @@ async function ContentDetail({ params, searchParams }) {
   const content = await loadContentDetail(ctx, contentId, filters);
   if (!content) notFound();
 
+  // Task Detail panel (?task=<id>). Hrefs keep this page's filters.
+  const here = (next) => `${content.href}${taskFiltersQuery({ ...filters, newTask: false, editTask: "", ...next })}`;
+  const panel = filters.task ? await loadTaskPanel(ctx.viewer, filters.task, { taskHref: (taskId) => here({ task: taskId }) }) : null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex min-w-0 flex-wrap items-center gap-3">
@@ -48,6 +53,9 @@ async function ContentDetail({ params, searchParams }) {
       </div>
 
       <ContentSummaryCard content={content} />
+      {/* Before TasksSection: the panel opens (showModal) first, so the Edit drawer
+          (?editTask) stacks on top of it. */}
+      {filters.task && <TaskDetailPanel open panel={panel} closeHref={here({ task: "" })} />}
       <TasksSection content={content} filters={filters} />
     </div>
   );

@@ -155,7 +155,9 @@ export function TaskCard({ task, withFooter = false }) {
   return (
     <article
       aria-label={`TASK ${task.numberLabel}: ${task.title}`}
-      className="flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-line bg-card"
+      className={`relative flex min-w-0 flex-col overflow-hidden rounded-[14px] border border-line bg-card ${
+        task.openHref ? "transition-colors hover:border-brand-500/60" : ""
+      }`}
     >
       <TaskCardBody task={task} showDue={!withFooter} />
       {withFooter && (
@@ -184,7 +186,21 @@ function TaskCardBody({ task, showDue }) {
           <TaskStatusChip task={task} />
         </span>
       </div>
-      <h4 className="line-clamp-2 break-words text-sm font-semibold text-fg">{task.title}</h4>
+      <h4 className="line-clamp-2 break-words text-sm font-semibold text-fg">
+        {task.openHref ? (
+          // Stretched link: the whole card opens the Task Detail panel (?task=<id>).
+          // The ⋯ menu sits above it (relative z-10); a drag never clicks (round 30).
+          <Link
+            href={task.openHref}
+            scroll={false}
+            className="rounded after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-brand-500"
+          >
+            {task.title}
+          </Link>
+        ) : (
+          task.title
+        )}
+      </h4>
       {(showDue || task.assetStatusLabel) && (
         <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-muted">
           {showDue && <span>{task.dueAt ? `Due ${dueLabel(task)}` : "No due date"}</span>}
@@ -252,7 +268,15 @@ export function TasksTable({ tasks, sort, sortHref }) {
                     <WorkLevelPill label={t.workLevelLabel} />
                   </span>
                 </td>
-                <td className={`${td} max-w-xs truncate font-semibold text-fg`} title={t.title}>{t.title}</td>
+                <td className={`${td} max-w-xs truncate font-semibold text-fg`} title={t.title}>
+                  {t.openHref ? (
+                    <Link href={t.openHref} scroll={false} className="rounded hover:text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
+                      {t.title}
+                    </Link>
+                  ) : (
+                    t.title
+                  )}
+                </td>
                 <td className={td}>
                   {t.assignee ? (
                     <span className="flex items-center gap-2">
@@ -390,7 +414,12 @@ export function TasksSection({ content, filters }) {
   const addHref = canAdd ? query({ newTask: true }) : null;
   const n = stats.all;
   // "Edit task" in each ⋯ opens the same drawer in edit mode (?editTask=<id>).
-  const tasks = content.tasks.map((t) => (t.canEdit ? { ...t, editHref: query({ editTask: t.id }) } : t));
+  // Clicking a card / table title opens the Task Detail panel (?task=<id>).
+  const tasks = content.tasks.map((t) => ({
+    ...t,
+    openHref: query({ task: t.id }),
+    ...(t.canEdit ? { editHref: query({ editTask: t.id }) } : {}),
+  }));
 
   return (
     <section aria-labelledby="tasks-heading" className="flex flex-col gap-4">
