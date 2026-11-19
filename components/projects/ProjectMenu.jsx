@@ -22,6 +22,7 @@ import {
 import { deleteContentAction, duplicateContentAction } from "@/app/(app)/projects/content-actions";
 import { changeTaskStatusAction, deleteTaskAction, duplicateTaskAction } from "@/app/(app)/projects/task-actions";
 import { toast } from "@/components/ui/Toast";
+import { invalidateTaskPanel } from "@/components/tasks/panelCache";
 import { taskStatuses } from "@/lib/tasks/types";
 import { StatusDot } from "./ProjectBits";
 import { buttonClass } from "@/components/ui/Button";
@@ -555,8 +556,10 @@ export function TaskMenu({ task, onDeleted }) {
     fd.set("taskId", task.id);
     startDuplicate(async () => {
       const res = await duplicateTaskAction(fd);
-      if (res?.ok) toast("Task duplicated");
-      else toast(res?.error ?? "Couldn't duplicate this task.", { tone: "error" });
+      if (res?.ok) {
+        invalidateTaskPanel(); // Task Detail cache (an open panel refetches)
+        toast("Task duplicated");
+      } else toast(res?.error ?? "Couldn't duplicate this task.", { tone: "error" });
     });
   };
 
@@ -681,8 +684,10 @@ function ChangeTaskStatusForm({ task, onDone }) {
     fd.set("status", status);
     startTransition(async () => {
       const res = await changeTaskStatusAction(fd);
-      if (res?.ok) onDone();
-      else setError(res?.error ?? "Something went wrong.");
+      if (res?.ok) {
+        invalidateTaskPanel(); // Task Detail cache (an open panel refetches)
+        onDone();
+      } else setError(res?.error ?? "Something went wrong.");
     });
   };
 
@@ -721,6 +726,7 @@ function DeleteTaskConfirm({ task, onDone, onDeleted }) {
     startTransition(async () => {
       const res = await deleteTaskAction(fd);
       if (res?.ok) {
+        invalidateTaskPanel(); // Task Detail cache
         onDone();
         onDeleted?.(); // e.g. the Task Detail panel closes itself
       } else setError(res?.error ?? "Something went wrong.");

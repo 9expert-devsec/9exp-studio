@@ -2,8 +2,8 @@
 
 // Create / Edit Task drawer. Opened from the content detail page; open state lives
 // in the URL (?newTask=1 create · ?editTask=<id> edit), so Back closes it. Closing
-// (×, Cancel, Escape, a successful save) replaces the URL with `closeHref` (the
-// same page + its task filters).
+// (×, Cancel, Escape, a successful save) removes those two params with
+// replaceState (filters and an open ?task= panel stay).
 //
 // Step 1 · Task basics (Figma node 123:6): name + type. Types come from the catalog
 // (lib/tasks/types.js); a type is selectable only if enabled AND in
@@ -17,9 +17,11 @@
 // (create: one atomic insert). The server re-validates everything.
 
 import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { ArrowLeft, Check, FileText, Info, Loader2, Lock, Pencil, Plus, X } from "lucide-react";
 import { createTaskAction, updateTaskAction } from "@/app/(app)/projects/task-actions";
+import { invalidateTaskPanel } from "@/components/tasks/panelCache";
+import { withSearchParams } from "@/lib/tasks/panelUrl";
 import { buttonClass } from "@/components/ui/Button";
 import Drawer, { useDrawerClose } from "@/components/ui/Drawer";
 import ClipDetailsStep, { emptyClipDetails } from "@/components/tasks/ClipDetailsStep";
@@ -44,20 +46,25 @@ const DETAIL_FORMS = {
 const STEP1_FIELDS = ["title", "type"];
 
 /**
- * @param {{ open: boolean, projectId: string, contentId: string, projectName: string,
- *           contentName: string, allowedTypes: string[], closeHref: string,
+ * @param {{ projectId: string, contentId: string, projectName: string,
+ *           contentName: string, allowedTypes: string[],
  *           returnFocusId: string, drawer: object | null }} props
  *   drawer: queries.js loadTaskDrawer() — mode, editing, detailTypes, options, people.
  */
-export default function CreateTaskDrawer({ open, closeHref, returnFocusId, drawer, ...rest }) {
-  const router = useRouter();
+export default function CreateTaskDrawer({ returnFocusId, drawer, ...rest }) {
+  // Open = the URL asks for it (read live, so a close is instant) AND the server
+  // rendered the drawer data for it. Closing removes only ?newTask / ?editTask
+  // with replaceState — no server round-trip, so the UI and the URL can never
+  // disagree (round 35); every other param (filters, an open ?task= panel) stays.
+  // Opening is a real navigation (a Link), which renders `drawer` on the server.
+  const sp = useSearchParams();
+  const urlOpen = sp.get("newTask") === "1" || !!sp.get("editTask");
+  const close = () => {
+    const { pathname, search, hash } = window.location;
+    window.history.replaceState(null, "", `${pathname}${withSearchParams(search, { newTask: null, editTask: null })}${hash}`);
+  };
   return (
-    <Drawer
-      open={open && !!drawer}
-      labelledBy={TITLE_ID}
-      returnFocusId={returnFocusId}
-      onClose={() => router.replace(closeHref, { scroll: false })}
-    >
+    <Drawer open={urlOpen && !!drawer} labelledBy={TITLE_ID} returnFocusId={returnFocusId} onClose={close}>
       {drawer && <TaskForm key={drawer.editing?.id ?? "new"} drawer={drawer} {...rest} />}
     </Drawer>
   );
@@ -112,6 +119,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
     startTransition(async () => {
       const res = await (isEdit ? updateTaskAction(fd) : createTaskAction(fd));
       if (res?.ok) {
+        if (isEdit) invalidateTaskPanel(); // an open Task Detail panel refetches
         requestClose();
         return;
       }

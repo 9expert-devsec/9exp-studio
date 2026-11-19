@@ -27,16 +27,30 @@ import { ContentMenu, TaskMenu } from "./ProjectMenu";
 import { ProgressBar, ProjectIconTile, StatusChip } from "./ProjectBits";
 import SortableBoard from "./SortableBoard";
 import AssetStatusChip from "@/components/tasks/AssetStatusChip";
+import TaskOpenLink from "@/components/tasks/TaskOpenLink";
 
-/** "{completed}/{total} Tasks" · status label · big % · accent bar (card + detail). */
-export function ContentProgress({ name, status, stats }) {
+/**
+ * "{completed}/{total} Tasks" · status label · big % · accent bar (card + detail).
+ * `prominentCount` (the Content tab card): the count line one size up, in the
+ * normal foreground colour, numbers semibold.
+ */
+export function ContentProgress({ name, status, stats, prominentCount = false }) {
   const s = statusInfo(status);
   return (
     <div>
       <div className="flex items-end justify-between gap-3">
-        <p className="text-xs text-fg-muted">
-          {stats.completed}/{stats.total} Tasks
-        </p>
+        {prominentCount ? (
+          <p className="text-sm text-fg">
+            <span className="font-semibold tabular-nums">
+              {stats.completed}/{stats.total}
+            </span>{" "}
+            Tasks
+          </p>
+        ) : (
+          <p className="text-xs text-fg-muted">
+            {stats.completed}/{stats.total} Tasks
+          </p>
+        )}
         <p className="flex items-baseline gap-2">
           <span className={`text-xs font-medium ${s.text}`}>{s.label}</span>
           <span className="text-2xl font-bold leading-none text-accent-fg">
@@ -81,10 +95,10 @@ export function ContentCard({ content }) {
       </header>
 
       <div className="p-4 sm:p-5">
-        <ContentProgress name={content.name} status={content.status} stats={stats} />
+        <ContentProgress name={content.name} status={content.status} stats={stats} prominentCount />
 
         {/* The first 3 tasks in manual (drag) order; dragging among them saves the full order. */}
-        <p className="mt-5 text-xs font-semibold text-fg">Tasks</p>
+        <p className="mt-5 text-xs font-semibold text-fg">Preview tasks</p>
         <div className="mt-2.5">
           {stats.recentTasks.length > 0 ? (
             <SortableBoard
@@ -188,15 +202,17 @@ function TaskCardBody({ task, showDue }) {
       </div>
       <h4 className="line-clamp-2 break-words text-sm font-semibold text-fg">
         {task.openHref ? (
-          // Stretched link: the whole card opens the Task Detail panel (?task=<id>).
-          // The ⋯ menu sits above it (relative z-10); a drag never clicks (round 30).
-          <Link
+          // Stretched link: the whole card opens the Task Detail panel (?task=<id>,
+          // pushed without a page round-trip — TaskOpenLink). The ⋯ menu sits above
+          // it (relative z-10); a drag never clicks (round 30). Focus ring for
+          // keyboard focus only (:focus-visible).
+          <TaskOpenLink
+            taskId={task.id}
             href={task.openHref}
-            scroll={false}
-            className="rounded after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-brand-500"
+            className="rounded outline-none after:absolute after:inset-0 after:content-[''] focus-visible:outline-2 focus-visible:outline-brand-500"
           >
             {task.title}
-          </Link>
+          </TaskOpenLink>
         ) : (
           task.title
         )}
@@ -270,9 +286,13 @@ export function TasksTable({ tasks, sort, sortHref }) {
                 </td>
                 <td className={`${td} max-w-xs truncate font-semibold text-fg`} title={t.title}>
                   {t.openHref ? (
-                    <Link href={t.openHref} scroll={false} className="rounded hover:text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
+                    <TaskOpenLink
+                      taskId={t.id}
+                      href={t.openHref}
+                      className="rounded outline-none hover:text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
+                    >
                       {t.title}
-                    </Link>
+                    </TaskOpenLink>
                   ) : (
                     t.title
                   )}
@@ -480,14 +500,12 @@ export function TasksSection({ content, filters }) {
 
       {(canAdd || content.drawer?.mode === "edit") && (
         <CreateTaskDrawer
-          open={!!content.drawer}
           drawer={content.drawer}
           projectId={content.projectId}
           contentId={content.id}
           projectName={content.projectName}
           contentName={content.name}
           allowedTypes={content.taskTypes}
-          closeHref={query({})}
           returnFocusId={ADD_TASK_ID}
         />
       )}

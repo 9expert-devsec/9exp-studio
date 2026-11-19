@@ -2,8 +2,8 @@
 
 // Task Detail panel (Figma 172:368) — a wide slide-over opened by ?task=<id> on the
 // project Content tab and the Content detail page. The task id lives ONLY in the
-// URL (the page reads searchParams and passes `panel`); closing (×, Escape,
-// backdrop, Back) replaces the URL with `closeHref`.
+// URL; the host below reads it with useSearchParams and loads the data itself
+// (round 35: no page re-render per open/close — see the host's comment).
 //
 // Read-only mode (`panel.readOnly`, round 34): a Related Asset opened from another
 // project the viewer isn't a member of — no ⋯ menu / Edit / status dropdown,
@@ -16,9 +16,9 @@
 // Comments / Reviews / Files / Related Tasks are "Coming soon".
 // Each column scrolls on its own (≥ lg); below that the body scrolls as one.
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
   BarChart3,
@@ -50,7 +50,16 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { changeTaskStatusAction, loadTaskActivityAction } from "@/app/(app)/projects/task-actions";
+import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
+import {
+  getCachedPanel,
+  invalidateTaskPanel,
+  panelCacheVersion,
+  setCachedPanel,
+  subscribePanelCache,
+} from "@/components/tasks/panelCache";
+import TaskOpenLink, { closeTaskPanel } from "@/components/tasks/TaskOpenLink";
+import { createLatestGuard, taskPanelUrl, validTaskId } from "@/lib/tasks/panelUrl";
 import { TaskMenu } from "@/components/projects/ProjectMenu";
 import { StatusChip } from "@/components/projects/ProjectBits";
 import AssetStatusChip from "@/components/tasks/AssetStatusChip";
@@ -67,29 +76,125 @@ import { getTaskType } from "@/lib/tasks/types";
 const TITLE_ID = "task-detail-title";
 
 /**
- * @param {{ open: boolean, panel: object | null, closeHref: string }} props
- *   panel: lib/projects/queries.js loadTaskPanel() — null = not found / not visible.
+ * The panel host (one per page). Open state = `?task=` in the URL, read with
+ * useSearchParams and nothing else (no local "isOpen"). Opening pushes the URL
+ * (TaskOpenLink / openTaskPanel); every close (×, Escape, backdrop, after delete)
+ * replaces it without `task` (closeTaskPanel); Back pops the push. Both use the
+ * native History API, so the page itself is never re-rendered for the panel.
+ *
+ * Data: loadTaskPanelAction(id) on the client, keyed by id. Cached in memory
+ * (panelCache.js): a cached task shows at once and refreshes in the background;
+ * an uncached one shows the skeleton. Only the latest request may set state
+ * (createLatestGuard), so a slow answer for a previous id is dropped. Writes call
+ * invalidateTaskPanel() → the open panel refetches.
  */
-export default function TaskDetailPanel({ open, panel, closeHref }) {
-  const router = useRouter();
+export default function TaskDetailPanel() {
+  const raw = useSearchParams().get("task");
+  const open = raw != null;
+  const taskId = validTaskId(raw);
+  const version = useSyncExternalStore(subscribePanelCache, panelCacheVersion, () => 0);
+  const [guard] = useState(createLatestGuard);
+  const [result, setResult] = useState({ id: "", panel: null, error: false });
+
+  // (Re)load on open, on a switch to another id, and after an invalidation
+  // (`version`). The cached copy keeps showing meanwhile.
+  useEffect(() => {
+    if (!taskId) return;
+    const token = guard.begin();
+    loadTaskPanelAction(taskId)
+      .then((res) => {
+        if (!guard.isCurrent(token)) return; // stale: the panel moved on / closed
+        if (!res?.ok) {
+          setResult({ id: taskId, panel: null, error: true });
+          return;
+        }
+        setCachedPanel(taskId, res.panel);
+        setResult({ id: taskId, panel: res.panel, error: false });
+      })
+      .catch(() => {
+        if (guard.isCurrent(token)) setResult({ id: taskId, panel: null, error: true });
+      });
+    return guard.cancel;
+  }, [taskId, version, guard]);
+
+  // What to show for the CURRENT id only: its latest answer, else its cached copy,
+  // else the skeleton. A result for another id is never shown.
+  const fresh = result.id === taskId && !result.error ? { panel: result.panel } : null;
+  const shown = taskId ? (fresh ?? getCachedPanel(taskId)) : { panel: null };
+  const panel = shown?.panel ?? null;
+  let body;
+  if (shown) body = panel ? <PanelBody key={panel.id} panel={panel} /> : <NotFound />;
+  else if (result.id === taskId && result.error) body = <NotFound failed />;
+  else body = <PanelSkeleton />;
+
+  // Swapped to another task (a Related Asset row): the clicked row is gone, so
+  // put focus back on the (stable) close button instead of losing it.
+  const closeRef = useRef(null);
+  useEffect(() => {
+    if (taskId) closeRef.current?.focus({ preventScroll: true });
+  }, [taskId]);
+
   return (
-    <Drawer
-      open={open}
-      size="wide"
-      closeOnBackdrop
-      labelledBy={TITLE_ID}
-      onClose={() => router.replace(closeHref, { scroll: false })}
-    >
-      {panel ? <PanelBody key={panel.id} panel={panel} /> : <NotFound />}
+    <Drawer open={open} size="wide" closeOnBackdrop labelledBy={TITLE_ID} onClose={closeTaskPanel}>
+      {/* The header stays mounted across skeleton → data → another task, so the
+          close button (initial focus) never loses focus. */}
+      <Header closeRef={closeRef}>{panel && <HeaderActions key={panel.id} panel={panel} />}</Header>
+      {body}
     </Drawer>
   );
 }
 
-function Header({ children }) {
+/** Instant placeholder while an uncached task loads: the two columns. */
+function PanelSkeleton() {
+  const bar = "animate-pulse rounded-full bg-track";
+  return (
+    <>
+      <div
+        aria-busy="true"
+        aria-label="Loading task"
+        className="min-h-0 flex-1 overflow-hidden bg-card-inset/40 p-3 sm:p-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-4"
+      >
+        <div className="flex flex-col gap-4 rounded-[16px] border border-line bg-card p-4 sm:p-5">
+          <div className="flex gap-2">
+            <span className={`h-6 w-20 ${bar}`} />
+            <span className={`h-6 w-24 ${bar}`} />
+          </div>
+          <span className={`h-7 w-3/4 ${bar}`} />
+          <span className={`h-4 w-full ${bar}`} />
+          <span className={`h-4 w-2/3 ${bar}`} />
+          <div className="mt-2 flex flex-col gap-3">
+            {[0, 1, 2, 3, 4, 5].map((i) => (
+              <span key={i} className={`h-5 w-full ${bar}`} />
+            ))}
+          </div>
+        </div>
+        <div className="mt-3 flex flex-col gap-3 lg:mt-0">
+          <div className="flex flex-col gap-4 rounded-[16px] border border-line bg-card p-4 sm:p-5">
+            <span className={`h-6 w-40 ${bar}`} />
+            <span className={`h-10 w-full ${bar}`} />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <span className="h-20 animate-pulse rounded-[14px] bg-card-inset" />
+              <span className="h-20 animate-pulse rounded-[14px] bg-card-inset" />
+            </div>
+          </div>
+          <div className="flex flex-col gap-3 rounded-[16px] border border-line bg-card p-4 sm:p-5">
+            <span className={`h-8 w-full ${bar}`} />
+            {[0, 1, 2].map((i) => (
+              <span key={i} className={`h-12 w-full ${bar}`} />
+            ))}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+function Header({ closeRef, children }) {
   const close = useDrawerClose();
   return (
     <header className="flex shrink-0 items-center gap-3 border-b border-line px-4 py-3 sm:px-6 sm:py-4">
       <button
+        ref={closeRef}
         type="button"
         onClick={close}
         aria-label="Close task detail"
@@ -106,15 +211,16 @@ function Header({ children }) {
   );
 }
 
-function NotFound() {
+function NotFound({ failed = false }) {
   const close = useDrawerClose();
   return (
     <>
-      <Header />
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
         <ListChecks className="size-8 text-fg-muted" aria-hidden="true" />
-        <p className="text-lg font-semibold text-fg">Task not found</p>
-        <p className="max-w-sm text-sm text-fg-muted">It may have been deleted, or you don&apos;t have access to its project.</p>
+        <p className="text-lg font-semibold text-fg">{failed ? "Couldn't load this task" : "Task not found"}</p>
+        <p className="max-w-sm text-sm text-fg-muted">
+          {failed ? "Check your connection, then close and open it again." : "It may have been deleted, or you don't have access to its project."}
+        </p>
         <button type="button" onClick={close} className={buttonClass("secondary")}>
           Close
         </button>
@@ -123,19 +229,25 @@ function NotFound() {
   );
 }
 
-function PanelBody({ panel }) {
+/** ⋯ menu + Edit Task (none when read-only). */
+function HeaderActions({ panel }) {
   const close = useDrawerClose();
   return (
     <>
-      <Header>
-        {panel.menuTask && <TaskMenu task={panel.menuTask} onDeleted={close} />}
-        {panel.editHref && (
-          <Link href={panel.editHref} scroll={false} className={buttonClass("primary", "min-h-10")}>
-            <Pencil className="size-4" aria-hidden="true" />
-            Edit Task
-          </Link>
-        )}
-      </Header>
+      {panel.menuTask && <TaskMenu task={panel.menuTask} onDeleted={close} />}
+      {panel.editHref && (
+        <Link href={panel.editHref} scroll={false} className={buttonClass("primary", "min-h-10")}>
+          <Pencil className="size-4" aria-hidden="true" />
+          Edit Task
+        </Link>
+      )}
+    </>
+  );
+}
+
+function PanelBody({ panel }) {
+  return (
+    <>
       {panel.readOnly && (
         // Opened as a Related Asset from a project the viewer belongs to.
         <p className="flex shrink-0 items-center gap-2 border-b border-line-subtle px-4 py-2 text-xs text-fg-muted sm:px-6">
@@ -191,6 +303,9 @@ function Row({ icon: Icon, label, children }) {
     </div>
   );
 }
+
+/** The real URL of another task's panel on this page (for new-tab clicks). Client only. */
+const assetHref = (taskId) => (typeof window === "undefined" ? "#" : taskPanelUrl(window.location, taskId));
 
 /** A link when there's an href; plain text otherwise (read-only viewers). */
 function MaybeLink({ href, children }) {
@@ -323,15 +438,17 @@ function InfoColumn({ panel }) {
             <ul className="mt-2 flex flex-col gap-2">
               {panel.relatedAssets.map((a) => (
                 <li key={a.id}>
-                  <Link
-                    href={a.openHref}
-                    scroll={false}
+                  {/* Swaps this panel to the asset in place (replace: Back still closes). */}
+                  <TaskOpenLink
+                    taskId={a.id}
+                    href={assetHref(a.id)}
+                    replace
                     className="flex items-center gap-3 rounded-[12px] border border-line px-3 py-2 transition-colors hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-brand-500"
                     aria-label={`Open ${a.typeLabel}: ${a.title}`}
                   >
                     <AssetRow a={a} />
                     <ExternalLink className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
-                  </Link>
+                  </TaskOpenLink>
                 </li>
               ))}
             </ul>
@@ -446,8 +563,12 @@ function StatusTile({ panel }) {
     fd.set("status", status);
     startTransition(async () => {
       const res = await changeTaskStatusAction(fd);
-      if (res?.ok) toast("Status updated");
-      else toast(res?.error ?? "Couldn't change the status.", { tone: "error" });
+      if (res?.ok) {
+        // Every cached panel (a Post's derived asset status may change too); this
+        // one refetches in place. The page refreshes itself (the action's refresh()).
+        invalidateTaskPanel();
+        toast("Status updated");
+      } else toast(res?.error ?? "Couldn't change the status.", { tone: "error" });
     });
   };
   return (

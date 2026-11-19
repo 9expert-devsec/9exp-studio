@@ -26,6 +26,7 @@ import {
   getProjectViewer,
 } from "@/lib/projects/access";
 import { recomputeRollups } from "@/lib/projects/progress";
+import { loadTaskPanel } from "@/lib/projects/queries";
 import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
@@ -343,6 +344,18 @@ export async function loadTaskActivityAction(taskId, filter, cursor) {
     cursor: cursor && typeof cursor === "object" ? { at: str(cursor.at), id: str(cursor.id) } : null,
   });
   return { ok: true, ...page };
+}
+
+/**
+ * Task Detail panel data for one task id (round 35: loaded on the client, so an
+ * open/close never re-renders the page). Same read rule as loadTaskPanel /
+ * taskReadAccess — `panel: null` = "Task not found". Reading only.
+ * @param {string} taskId
+ */
+export async function loadTaskPanelAction(taskId) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  return { ok: true, panel: await loadTaskPanel(viewer, str(taskId)) };
 }
 
 /**
