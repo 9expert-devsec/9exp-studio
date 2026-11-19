@@ -17,6 +17,7 @@ import {
   canCreateTask,
   canDeleteTask,
   canEditTask,
+  canReorderTasks,
   canView,
   findContentTask,
   findProjectContent,
@@ -26,11 +27,14 @@ import {
 import { recomputeRollups } from "@/lib/projects/progress";
 import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
+import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
+import { buildTaskCopy } from "@/lib/tasks/duplicate";
 import { searchRelated } from "@/lib/msdb";
 import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
 import { issueFolderId } from "@/lib/tasks/folderCounter";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
 import {
+  getTaskType,
   hasAssetStatus,
   initialAssetStatus,
   initialStatus,
@@ -64,6 +68,10 @@ async function readDetails(formData, type, project, existing, viewer) {
   if (str(formData.get("withDetails")) !== "1") return { skip: true };
   return parseTaskDetails(type, formData.get("details"), { project, existing, viewerId: String(viewer.id) });
 }
+
+/** A content's tasks, order fields only (scoped to content + project). */
+const siblingTasks = (project, content) =>
+  Task.find({ content: content._id, project: project._id }).select("_id number sortOrder").lean();
 
 /** Best-effort Cloudinary cleanup (never blocks or fails the action). */
 async function deletePhotos(publicIds) {
@@ -100,9 +108,12 @@ export async function createTaskAction(formData) {
   // Folder ID (graphic → "YYMM-NNNG"), issued here on the server only. If the
   // insert below fails, the number is skipped, never reused.
   const folderId = await issueFolderId(type);
+  // Manually ordered content → append at the end (else ordered by number).
+  const sortOrder = appendedSortOrder(await siblingTasks(project, content));
 
   const task = await createNumbered(TASK_SEQ, content._id, {
     ...(folderId ? { folderId } : {}),
+    ...(sortOrder ? { sortOrder } : {}),
     project: project._id,
     content: content._id,
     title,
@@ -215,6 +226,62 @@ export async function deleteTaskAction(formData) {
   await ensureSeq(TASK_SEQ, content._id);
   await Task.deleteOne({ _id: task._id, content: content._id, project: project._id });
   await deletePhotos(removedPhotoIds(task.details, {}));
+
+  await recomputeRollups({ projectId: project._id, contentId: content._id });
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Drag to reorder the tasks of ONE content (display order only; numbers never
+ * change). `orderedIds` must be exactly that content's current tasks. Same
+ * permission as editing the content (canEditContent).
+ */
+export async function reorderTasksAction(projectId, contentId, orderedIds) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  const project = await findViewableProject(viewer, str(projectId));
+  if (!project) return fail(PROJECT_NOT_FOUND);
+  const content = await findProjectContent(project, str(contentId));
+  if (!content) return fail(CONTENT_NOT_FOUND);
+  if (!canReorderTasks(viewer, project, content)) {
+    return fail(project.status === "cancelled" ? PROJECT_CANCELLED : "Only the project owner, the item's creator or an admin can reorder its tasks.");
+  }
+
+  const current = await siblingTasks(project, content);
+  const check = validateReorder(current.map((t) => t._id.toString()), orderedIds);
+  if (!check.ok) return fail("The task list changed. Reload the page and try again.");
+
+  await Task.bulkWrite(orderWrites(check.ids, { content: content._id, project: project._id }));
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Duplicate a task (lib/tasks/duplicate.js): same content, next task number,
+ * placed right after the original; status reset, " (copy)", no photos, a NEW
+ * Folder ID for types that issue one. Same permission as creating that type here.
+ */
+export async function duplicateTaskAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  const { viewer, project, content } = scope;
+  if (project.status === "cancelled") return fail(PROJECT_CANCELLED);
+
+  const task = await findContentTask(project, content, str(formData.get("taskId")));
+  if (!task) return fail(TASK_NOT_FOUND);
+  if (!(await canCreateTask(viewer, project, task.type))) {
+    return fail(`You can't create ${getTaskType(task.type)?.label ?? task.type} tasks in this project.`);
+  }
+
+  const folderId = await issueFolderId(task.type);
+  const copy = await createNumbered(TASK_SEQ, content._id, buildTaskCopy(task, { createdBy: viewer.id, folderId }));
+  if (!copy) return fail("Could not number this task — please try again.");
+
+  // Right after the original: (re)write the whole content's order.
+  const ordered = sortByOrder(await siblingTasks(project, content)).map((t) => t._id.toString());
+  const ids = insertAfter(ordered, task._id.toString(), copy._id.toString());
+  await Task.bulkWrite(orderWrites(ids, { content: content._id, project: project._id }));
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();

@@ -25,6 +25,7 @@ import ContentToolbar from "./ContentToolbar";
 import CreateTaskDrawer from "./CreateTaskDrawer";
 import { ContentMenu, TaskMenu } from "./ProjectMenu";
 import { ProgressBar, ProjectIconTile, StatusChip } from "./ProjectBits";
+import SortableBoard from "./SortableBoard";
 
 /** "{completed}/{total} Tasks" · status label · big % · accent bar (card + detail). */
 export function ContentProgress({ name, status, stats }) {
@@ -81,12 +82,21 @@ export function ContentCard({ content }) {
       <div className="p-4 sm:p-5">
         <ContentProgress name={content.name} status={content.status} stats={stats} />
 
-        <p className="mt-5 text-xs font-semibold text-fg">Recent Tasks</p>
-        <div className="mt-2.5 grid gap-3 md:grid-cols-3">
+        {/* The first 3 tasks in manual (drag) order; dragging among them saves the full order. */}
+        <p className="mt-5 text-xs font-semibold text-fg">Tasks</p>
+        <div className="mt-2.5">
           {stats.recentTasks.length > 0 ? (
-            stats.recentTasks.slice(0, 3).map((t) => <TaskCard key={t.id} task={t} />)
+            <SortableBoard
+              kind="tasks"
+              label={`Tasks of ${content.name}`}
+              projectId={content.projectId}
+              contentId={content.id}
+              items={stats.recentTasks.slice(0, 3).map((t) => ({ id: t.id, node: <TaskCard task={t} /> }))}
+              fullOrder={content.taskOrder}
+              canReorder={!!content.canReorderTasks}
+            />
           ) : (
-            <div className="flex items-center justify-center gap-2 rounded-[12px] bg-card-inset py-6 text-sm text-fg-muted md:col-span-3">
+            <div className="flex items-center justify-center gap-2 rounded-[12px] bg-card-inset py-6 text-sm text-fg-muted">
               <ListChecks className="size-4" aria-hidden="true" />
               No tasks yet
             </div>
@@ -136,7 +146,7 @@ const WorkLevelPill = ({ label }) =>
   ) : null;
 
 /**
- * Task card: the content card's "Recent Tasks" (compact: due date in the body, no
+ * Task card: the content card's "Tasks" (compact: due date in the body, no
  * menu) and, withFooter, the content detail Cards view, whose footer strip carries
  * the due date (left) and the task ⋯ menu (right). Shape: queries.js taskView().
  */
@@ -192,8 +202,9 @@ const th = "px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide te
 const td = "px-4 py-3 align-middle text-sm";
 
 /**
- * Content detail Table view. The Due date header links to the opposite sort. Row
- * checkboxes are inert (bulk actions later).
+ * Content detail Table view: same order as the Cards view (manual by default),
+ * not draggable. The Due date header switches to a due-date sort. Row checkboxes
+ * are inert (bulk actions later).
  */
 export function TasksTable({ tasks, sort, sortHref }) {
   const desc = sort === "due_desc";
@@ -208,10 +219,14 @@ export function TasksTable({ tasks, sort, sortHref }) {
             <th scope="col" className={th}>ID</th>
             <th scope="col" className={th}>Task</th>
             <th scope="col" className={th}>Assignee</th>
-            <th scope="col" className={th} aria-sort={desc ? "descending" : "ascending"}>
+            <th scope="col" className={th} aria-sort={desc ? "descending" : sort === "due_asc" ? "ascending" : "none"}>
               <Link href={sortHref} scroll={false} replace className="inline-flex items-center gap-1 rounded hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500">
                 Due date
-                {desc ? <ArrowDown className="size-3.5" aria-hidden="true" /> : <ArrowUp className="size-3.5" aria-hidden="true" />}
+                {desc ? (
+                  <ArrowDown className="size-3.5" aria-hidden="true" />
+                ) : sort === "due_asc" ? (
+                  <ArrowUp className="size-3.5" aria-hidden="true" />
+                ) : null}
               </Link>
             </th>
             <th scope="col" className={th}>Status</th>
@@ -360,7 +375,8 @@ const ADD_TASK_ID = "add-task-trigger";
 export function TasksSection({ content, filters }) {
   const { stats } = content;
   const query = (next) => `${content.href}${taskFiltersQuery({ ...filters, newTask: false, editTask: "", ...next })}`;
-  const sortHref = query({ sort: filters.sort === "due_desc" ? "due_asc" : "due_desc" });
+  // Table header: Due date ↑ ⇄ ↓ (from Manual it starts with ↑).
+  const sortHref = query({ sort: filters.sort === "due_asc" ? "due_desc" : "due_asc" });
   const canAdd = content.taskTypes.length > 0;
   const addHref = canAdd ? query({ newTask: true }) : null;
   const n = stats.all;
@@ -398,13 +414,24 @@ export function TasksSection({ content, filters }) {
           </Link>
         </div>
       ) : filters.view === "table" ? (
+        // Same order as the cards (manual by default); not draggable.
         <TasksTable tasks={tasks} sort={filters.sort} sortHref={sortHref} />
       ) : (
-        <div className="grid gap-3 md:grid-cols-3">
-          {tasks.map((t) => (
-            <TaskCard key={t.id} task={t} withFooter />
-          ))}
-        </div>
+        <SortableBoard
+          kind="tasks"
+          label="Tasks"
+          projectId={content.projectId}
+          contentId={content.id}
+          items={tasks.map((t) => ({ id: t.id, node: <TaskCard task={t} withFooter /> }))}
+          canReorder={!!content.canReorderTasks}
+          blockedReason={
+            content.reorderBlocked === "filters"
+              ? "Clear filters to reorder"
+              : content.reorderBlocked === "sort"
+                ? "Switch to Manual order to reorder"
+                : null
+          }
+        />
       )}
 
       {tasks.length > 0 && (

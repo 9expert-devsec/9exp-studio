@@ -2,7 +2,7 @@
 
 // URL-driven list toolbar, shared by the Content tab (kind="content": search ·
 // status · "+ Add content") and the content detail Tasks section (kind="tasks":
-// search · status GROUP · "Due date ↑/↓" sort · Cards|Table view · "+ Add task",
+// search · status GROUP · order (Manual / Due date ↑/↓) · Cards|Table view · "+ Add task",
 // which opens the Create Task drawer via ?newTask=1).
 // `filters` come from the server page, parsed from searchParams on every render;
 // nothing is mirrored into state. Typing replaces ?q= after ~300ms (the input is
@@ -13,13 +13,14 @@
 import { useEffect, useOptimistic, useRef, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowDown, ArrowUp, LayoutGrid, Plus, Search, Table2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, LayoutGrid, Plus, Search, Table2 } from "lucide-react";
 import { buttonClass } from "@/components/ui/Button";
-import { CONTENT_SEARCH_MAX, contentFiltersQuery, taskFiltersQuery } from "@/lib/projects/filters";
+import { CONTENT_SEARCH_MAX, contentFiltersQuery, nextTaskSort, taskFiltersQuery } from "@/lib/projects/filters";
 import { PROJECT_STATUS } from "@/lib/projects/status";
 import { PROJECT_STATUSES } from "@/lib/projects/rules";
 
 const DEBOUNCE_MS = 300;
+const SORT_LABEL = { manual: "manual (drag order)", due_asc: "due date, ascending", due_desc: "due date, descending" };
 const QUERY = { content: contentFiltersQuery, tasks: taskFiltersQuery };
 const control =
   "min-h-10 rounded-full border border-control-line bg-control px-4 text-base text-fg outline-none transition-colors placeholder:text-fg-muted focus:border-brand-500 focus:ring-1 focus:ring-brand-500 sm:text-sm";
@@ -107,18 +108,28 @@ export default function ContentToolbar({ kind = "content", basePath, filters, ad
 
       {isTasks && (
         <>
+          {/* Order cycles Manual (drag order) → Due date ↑ → Due date ↓. */}
           <Link
-            href={hrefFor({ sort: filters.sort === "due_desc" ? "due_asc" : "due_desc" })}
+            href={hrefFor({ sort: nextTaskSort(filters.sort) })}
             scroll={false}
             replace
             className={chip}
-            aria-label={`Sort by due date, ${filters.sort === "due_desc" ? "descending" : "ascending"} (change)`}
+            aria-label={`Order: ${SORT_LABEL[filters.sort] ?? SORT_LABEL.manual} (change)`}
           >
-            Due date
-            {filters.sort === "due_desc" ? (
-              <ArrowDown className="size-4" aria-hidden="true" />
+            {filters.sort === "manual" ? (
+              <>
+                <GripVertical className="size-4" aria-hidden="true" />
+                Manual order
+              </>
             ) : (
-              <ArrowUp className="size-4" aria-hidden="true" />
+              <>
+                Due date
+                {filters.sort === "due_desc" ? (
+                  <ArrowDown className="size-4" aria-hidden="true" />
+                ) : (
+                  <ArrowUp className="size-4" aria-hidden="true" />
+                )}
+              </>
             )}
           </Link>
           <div role="group" aria-label="View" className="inline-flex gap-0.5 rounded-full border border-control-line bg-control p-0.5">

@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import AppShell from "@/components/shell/AppShell";
+import { Toaster } from "@/components/ui/Toast";
 import { TeamNavItem, UserMenuSkeleton, UserMenuSlot } from "@/components/shell/SessionSlots";
 
 // Shell for every signed-in route. proxy.js already requires a session for
@@ -19,6 +20,7 @@ export default function AppLayout({ children }) {
       }
     >
       {children}
+      <Toaster />
     </AppShell>
   );
 }

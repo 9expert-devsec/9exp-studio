@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import ContentToolbar from "@/components/projects/ContentToolbar";
 import { ContentCard, NoContent, NoContentMatches } from "@/components/projects/ContentViews";
+import SortableBoard from "@/components/projects/SortableBoard";
 import { ContentListSkeleton } from "@/components/projects/Skeletons";
 import { parseContentFilters } from "@/lib/projects/filters";
 import { loadContentList, loadProjectContext } from "@/lib/projects/queries";
@@ -26,7 +27,7 @@ async function ContentTab({ params, searchParams }) {
   if (!ctx) notFound();
 
   const filters = parseContentFilters(await searchParams);
-  const { total, items, canAdd } = await loadContentList(ctx, filters);
+  const { total, items, canAdd, canReorder, reorderBlocked } = await loadContentList(ctx, filters);
   const href = `/projects/${ctx.project._id}`;
   const addHref = canAdd ? `${href}/content/new` : null;
 
@@ -50,13 +51,16 @@ async function ContentTab({ params, searchParams }) {
       ) : items.length === 0 ? (
         <NoContentMatches clearHref={href} />
       ) : (
-        <ul className="flex flex-col gap-4">
-          {items.map((c) => (
-            <li key={c.id}>
-              <ContentCard content={c} />
-            </li>
-          ))}
-        </ul>
+        // Drag to reorder the content cards (manual order; numbers never change).
+        <SortableBoard
+          kind="content"
+          layout="list"
+          label="Content"
+          projectId={ctx.project._id.toString()}
+          items={items.map((c) => ({ id: c.id, node: <ContentCard content={c} /> }))}
+          canReorder={canReorder}
+          blockedReason={reorderBlocked ? "Clear filters to reorder" : null}
+        />
       )}
     </section>
   );

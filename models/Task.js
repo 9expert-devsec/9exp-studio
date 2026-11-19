@@ -15,6 +15,9 @@ const TaskSchema = new mongoose.Schema(
     // Per-content sequence ("TASK 01") from the atomic Content.taskSeq counter
     // (lib/projects/sequence.js). Never reused; the unique index is the backstop.
     number: { type: Number, required: true, min: 1 },
+    // Manual display order within its content (drag to reorder; lib/projects/order.js).
+    // Absent until the content's first reorder/duplicate → ordered by number.
+    sortOrder: { type: Number },
     title: { type: String, required: true, trim: true, maxlength: TASK_TITLE_MAX },
     type: { type: String, enum: TASK_TYPE_KEYS, required: true },
     status: { type: String, required: true },

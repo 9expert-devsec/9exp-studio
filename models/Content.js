@@ -23,6 +23,9 @@ const ContentSchema = new mongoose.Schema(
     // Last task number handed out (atomic $inc, lib/projects/sequence.js). No
     // default on purpose: when missing it is initialised from the current max.
     taskSeq: { type: Number },
+    // Manual display order within the project (drag to reorder; lib/projects/order.js).
+    // Absent until the project's first reorder/duplicate → ordered by number.
+    sortOrder: { type: Number },
   },
   { timestamps: true, collection: "contents" }
 );

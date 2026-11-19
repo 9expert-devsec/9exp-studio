@@ -7,6 +7,7 @@ import {
   ArrowRightLeft,
   Ban,
   Check,
+  Copy,
   ExternalLink,
   FileText,
   Link2,
@@ -18,8 +19,9 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { deleteContentAction } from "@/app/(app)/projects/content-actions";
-import { changeTaskStatusAction, deleteTaskAction } from "@/app/(app)/projects/task-actions";
+import { deleteContentAction, duplicateContentAction } from "@/app/(app)/projects/content-actions";
+import { changeTaskStatusAction, deleteTaskAction, duplicateTaskAction } from "@/app/(app)/projects/task-actions";
+import { toast } from "@/components/ui/Toast";
 import { assetStatuses, taskStatuses } from "@/lib/tasks/types";
 import { StatusDot } from "./ProjectBits";
 import { buttonClass } from "@/components/ui/Button";
@@ -322,10 +324,12 @@ export default function ProjectMenu({
 export function ContentMenu({ content, showOpen = true, showEdit = true, then = "list" }) {
   const [open, setOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmDuplicate, setConfirmDuplicate] = useState(false);
   const [error, setError] = useState("");
   const [copied, copy] = useCopyLink(setError);
   const canEdit = showEdit && content.canEdit;
-  if (!showOpen && !content.briefLink && !canEdit && !content.canDelete) return null;
+  const canDuplicate = !!content.canDuplicate;
+  if (!showOpen && !content.briefLink && !canEdit && !canDuplicate && !content.canDelete) return null;
 
   return (
     <ActionMenu
@@ -336,6 +340,9 @@ export function ContentMenu({ content, showOpen = true, showEdit = true, then = 
       aside={
         <>
           <span aria-live="polite" className="sr-only">{copied ? "Brief link copied" : ""}</span>
+          {canDuplicate && (
+            <DuplicateContentDialog open={confirmDuplicate} onClose={() => setConfirmDuplicate(false)} content={content} />
+          )}
           {content.canDelete && (
             <DeleteContentDialog
               open={confirmDelete}
@@ -376,6 +383,20 @@ export function ContentMenu({ content, showOpen = true, showEdit = true, then = 
           Edit
         </Link>
       )}
+      {canDuplicate && (
+        <button
+          role="menuitem"
+          type="button"
+          className={itemClass}
+          onClick={() => {
+            setOpen(false);
+            setConfirmDuplicate(true);
+          }}
+        >
+          <Copy className="size-4 text-fg-muted" aria-hidden="true" />
+          Duplicate
+        </button>
+      )}
       {content.canDelete && (
         <>
           <div role="separator" className="my-1 h-px bg-line-subtle" />
@@ -395,6 +416,62 @@ export function ContentMenu({ content, showOpen = true, showEdit = true, then = 
       )}
       <MenuError error={error} />
     </ActionMenu>
+  );
+}
+
+/**
+ * ONE confirm for duplicating a content item and all its tasks (the copy lands
+ * right after it). The server does it in a transaction and re-checks permissions.
+ */
+function DuplicateContentDialog({ open, onClose, content }) {
+  const n = content.taskCount ?? content.stats?.all ?? 0;
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      closeOnBackdrop
+      title="Duplicate content?"
+      description={`Duplicate “${content.name}” and its ${n} ${n === 1 ? "task" : "tasks"}?`}
+    >
+      {open && <DuplicateContentConfirm content={content} onDone={onClose} />}
+    </Modal>
+  );
+}
+
+function DuplicateContentConfirm({ content, onDone }) {
+  const [error, setError] = useState("");
+  const [pending, startTransition] = useTransition();
+
+  const confirm = () => {
+    setError("");
+    const fd = new FormData();
+    fd.set("projectId", content.projectId);
+    fd.set("contentId", content.id);
+    startTransition(async () => {
+      const res = await duplicateContentAction(fd);
+      if (res?.ok) {
+        onDone();
+        toast("Content duplicated");
+      } else setError(res?.error ?? "Something went wrong.");
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <p className="text-sm text-fg-muted">
+        The copy gets the next content number and “(copy)” in its name. Its tasks start fresh (first status, no photos; Graphic tasks get new Folder IDs).
+      </p>
+      <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onDone} className={buttonClass("secondary")} data-autofocus>
+          Cancel
+        </button>
+        <button type="button" onClick={confirm} disabled={pending} className={buttonClass("primary")}>
+          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+          Duplicate
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -463,10 +540,25 @@ function DeleteContentConfirm({ content, then, onDone }) {
 export function TaskMenu({ task }) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState(null);
+  const [duplicating, startDuplicate] = useTransition();
   const canEdit = !!(task.canEdit && task.editHref);
-  if (!canEdit && !task.canChangeStatus && !task.canDelete) return null;
+  if (!canEdit && !task.canChangeStatus && !task.canDuplicate && !task.canDelete) return null;
   const close = () => setDialog(null);
   const idLabel = `TASK ${task.numberLabel}`;
+
+  // Duplicate: no dialog; the copy appears right after this card, then a toast.
+  const duplicate = () => {
+    setOpen(false);
+    const fd = new FormData();
+    fd.set("projectId", task.projectId);
+    fd.set("contentId", task.contentId);
+    fd.set("taskId", task.id);
+    startDuplicate(async () => {
+      const res = await duplicateTaskAction(fd);
+      if (res?.ok) toast("Task duplicated");
+      else toast(res?.error ?? "Couldn't duplicate this task.", { tone: "error" });
+    });
+  };
 
   return (
     <ActionMenu
@@ -514,9 +606,19 @@ export function TaskMenu({ task }) {
           Change status
         </button>
       )}
+      {task.canDuplicate && (
+        <button role="menuitem" type="button" className={itemClass} disabled={duplicating} onClick={duplicate}>
+          {duplicating ? (
+            <Loader2 className="size-4 animate-spin text-fg-muted" aria-hidden="true" />
+          ) : (
+            <Copy className="size-4 text-fg-muted" aria-hidden="true" />
+          )}
+          Duplicate
+        </button>
+      )}
       {task.canDelete && (
         <>
-          {(canEdit || task.canChangeStatus) && <div role="separator" className="my-1 h-px bg-line-subtle" />}
+          {(canEdit || task.canChangeStatus || task.canDuplicate) && <div role="separator" className="my-1 h-px bg-line-subtle" />}
           <button
             role="menuitem"
             type="button"
