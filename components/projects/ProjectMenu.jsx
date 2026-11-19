@@ -22,7 +22,7 @@ import {
 import { deleteContentAction, duplicateContentAction } from "@/app/(app)/projects/content-actions";
 import { changeTaskStatusAction, deleteTaskAction, duplicateTaskAction } from "@/app/(app)/projects/task-actions";
 import { toast } from "@/components/ui/Toast";
-import { assetStatuses, taskStatuses } from "@/lib/tasks/types";
+import { taskStatuses } from "@/lib/tasks/types";
 import { StatusDot } from "./ProjectBits";
 import { buttonClass } from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
@@ -665,10 +665,9 @@ function StatusRadios({ legend, name, options, value, onChange }) {
 }
 
 function ChangeTaskStatusForm({ task, onDone }) {
+  // A post's Status Asset is derived from its Related Assets — not set here.
   const statuses = taskStatuses(task.type);
-  const assets = assetStatuses(task.type);
   const [status, setStatus] = useState(task.status);
-  const [asset, setAsset] = useState(task.assetStatus ?? assets[0]?.key ?? "");
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
 
@@ -680,7 +679,6 @@ function ChangeTaskStatusForm({ task, onDone }) {
     fd.set("contentId", task.contentId);
     fd.set("taskId", task.id);
     fd.set("status", status);
-    if (assets.length) fd.set("assetStatus", asset);
     startTransition(async () => {
       const res = await changeTaskStatusAction(fd);
       if (res?.ok) onDone();
@@ -691,8 +689,10 @@ function ChangeTaskStatusForm({ task, onDone }) {
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-5">
       <StatusRadios legend="Status" name="status" options={statuses} value={status} onChange={setStatus} />
-      {assets.length > 0 && (
-        <StatusRadios legend="Status Asset" name="assetStatus" options={assets} value={asset} onChange={setAsset} />
+      {task.assetStatusLabel && (
+        <p className="text-xs text-fg-muted">
+          Asset: <span className="font-medium text-fg">{task.assetStatusLabel}</span> — set automatically from the post&apos;s Related Assets.
+        </p>
       )}
       <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

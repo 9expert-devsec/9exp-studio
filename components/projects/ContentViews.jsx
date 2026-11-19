@@ -26,6 +26,7 @@ import CreateTaskDrawer from "./CreateTaskDrawer";
 import { ContentMenu, TaskMenu } from "./ProjectMenu";
 import { ProgressBar, ProjectIconTile, StatusChip } from "./ProjectBits";
 import SortableBoard from "./SortableBoard";
+import AssetStatusChip from "@/components/tasks/AssetStatusChip";
 
 /** "{completed}/{total} Tasks" · status label · big % · accent bar (card + detail). */
 export function ContentProgress({ name, status, stats }) {
@@ -185,9 +186,9 @@ function TaskCardBody({ task, showDue }) {
       </div>
       <h4 className="line-clamp-2 break-words text-sm font-semibold text-fg">{task.title}</h4>
       {(showDue || task.assetStatusLabel) && (
-        <p className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-fg-muted">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-fg-muted">
           {showDue && <span>{task.dueAt ? `Due ${dueLabel(task)}` : "No due date"}</span>}
-          {task.assetStatusLabel && <span>Asset · {task.assetStatusLabel}</span>}
+          <AssetStatusChip status={task.assetStatus} label={task.assetStatusLabel} />
         </p>
       )}
       <div className="grid grid-cols-2 gap-3 border-t border-line-subtle pt-3">
@@ -210,7 +211,7 @@ export function TasksTable({ tasks, sort, sortHref }) {
   const desc = sort === "due_desc";
   return (
     <div className={`${cardClass({ size: "sm", padded: false })} overflow-x-auto`}>
-      <table className="w-full min-w-[760px]">
+      <table className="w-full min-w-[860px]">
         <thead className="border-b border-line">
           <tr>
             <th scope="col" className={`${th} w-10`}>
@@ -230,6 +231,7 @@ export function TasksTable({ tasks, sort, sortHref }) {
               </Link>
             </th>
             <th scope="col" className={th}>Status</th>
+            <th scope="col" className={th}>Asset</th>
             <th scope="col" className={`${th} text-right`}>
               <span className="sr-only">Actions</span>
             </th>
@@ -264,6 +266,13 @@ export function TasksTable({ tasks, sort, sortHref }) {
                 <td className={`${td} whitespace-nowrap text-fg-muted`}>{t.dueAtLabel || "—"}</td>
                 <td className={td}>
                   <TaskStatusChip task={t} />
+                </td>
+                <td className={td}>
+                  {t.assetStatusLabel ? (
+                    <AssetStatusChip status={t.assetStatus} label={t.assetStatusLabel} />
+                  ) : (
+                    <span className="text-fg-muted">—</span>
+                  )}
                 </td>
                 <td className={`${td} text-right`}>
                   <span className="inline-flex justify-end">

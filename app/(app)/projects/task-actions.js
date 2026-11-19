@@ -30,17 +30,12 @@ import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
 import { buildTaskCopy } from "@/lib/tasks/duplicate";
 import { searchRelated } from "@/lib/msdb";
+import { escapeRegex } from "@/lib/projects/rules";
+import { assetRows } from "@/lib/tasks/assetRows";
 import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
 import { issueFolderId } from "@/lib/tasks/folderCounter";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
-import {
-  getTaskType,
-  hasAssetStatus,
-  initialAssetStatus,
-  initialStatus,
-  isValidAssetStatus,
-  isValidStatus,
-} from "@/lib/tasks/types";
+import { ASSET_TASK_TYPE_KEYS, getTaskType, initialStatus, isValidStatus } from "@/lib/tasks/types";
 import Task from "@/models/Task";
 
 const fail = (error, fieldErrors) => ({ ok: false, error, ...(fieldErrors ? { fieldErrors } : {}) });
@@ -119,7 +114,7 @@ export async function createTaskAction(formData) {
     title,
     type,
     status,
-    assetStatus: hasAssetStatus(type) ? initialAssetStatus(type) : null,
+    assetStatus: null, // post: derived at read time (lib/tasks/assets.js), never stored
     assignee: more.assignee,
     startAt: more.startAt,
     dueAt: more.dueAt,
@@ -171,8 +166,9 @@ export async function updateTaskAction(formData) {
 }
 
 /**
- * Change a task's status (and, for post, its Status Asset). Both keys must be valid
- * for the task's type in the catalog.
+ * Change a task's status (must be valid for its type in the catalog). A post's
+ * Status Asset is derived from its Related Assets (lib/tasks/assets.js), never set
+ * here; any posted assetStatus is ignored.
  */
 export async function changeTaskStatusAction(formData) {
   const scope = await loadScope(formData);
@@ -192,14 +188,7 @@ export async function changeTaskStatusAction(formData) {
   const status = str(formData.get("status"));
   if (!isValidStatus(task.type, status)) return fail("Choose a status for this task type.");
 
-  const set = { status };
-  if (hasAssetStatus(task.type)) {
-    const asset = str(formData.get("assetStatus"));
-    if (!isValidAssetStatus(task.type, asset)) return fail("Choose an asset status.");
-    set.assetStatus = asset;
-  }
-
-  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: set });
+  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { status } });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -320,6 +309,31 @@ export async function deleteUnsavedTaskPhotoAction(projectId, publicId) {
   if (await Task.exists({ "details.photos.publicId": id })) return { ok: true }; // saved: the save handles it
   await deleteTaskPhoto(id);
   return { ok: true };
+}
+
+/**
+ * Post "Related Assets" picker: Clip / Graphic / Photo / Article tasks from ANY
+ * project (ruling: not limited to the viewer's projects), so any signed-in user
+ * may search. Title or Folder ID (regex-escaped, case-insensitive), optional type,
+ * newest first, max 30. Returns only what the rows show.
+ * @param {string} q @param {string} type "" (all) | clip | graphic | photo | article
+ */
+export async function searchRelatedAssetsAction(q, type) {
+  const viewer = await getProjectViewer();
+  if (!viewer) return fail(SIGNED_OUT);
+  const types = ASSET_TASK_TYPE_KEYS.includes(str(type)) ? [str(type)] : ASSET_TASK_TYPE_KEYS;
+  const term = str(q).trim().slice(0, 100);
+  const filter = { type: { $in: types } };
+  if (term) {
+    const re = new RegExp(escapeRegex(term), "i");
+    filter.$or = [{ title: re }, { folderId: re }];
+  }
+  const tasks = await Task.find(filter)
+    .sort({ createdAt: -1 })
+    .limit(30)
+    .select("type status title folderId project assignee")
+    .lean();
+  return { ok: true, results: await assetRows(tasks) };
 }
 
 /**

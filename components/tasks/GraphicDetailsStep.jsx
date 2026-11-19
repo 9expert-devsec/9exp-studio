@@ -11,10 +11,9 @@
 import { useState } from "react";
 import { Check, Copy, FolderOpen, ImagePlus, Loader2, X } from "lucide-react";
 import { deleteUnsavedTaskPhotoAction, signTaskPhotoUploadAction } from "@/app/(app)/projects/task-actions";
-import Combobox from "@/components/ui/Combobox";
 import { DateTimeField, Field, ReferenceField, Section } from "@/components/tasks/DetailBlocks";
 import PersonPicker from "@/components/tasks/PersonPicker";
-import PlatformIcon from "@/components/tasks/PlatformIcon";
+import PlatformWorkTypeFields from "@/components/tasks/PlatformWorkTypeFields";
 import RelatedPicker from "@/components/tasks/RelatedPicker";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
@@ -46,13 +45,6 @@ export const emptyGraphicDetails = () => ({
   dueDate: "",
   dueTime: "",
 });
-
-const PlatformRow = ({ o }) => (
-  <span className="flex min-w-0 items-center gap-2">
-    <PlatformIcon icon={o.icon} />
-    <span className="truncate">{o.label}</span>
-  </span>
-);
 
 /** Read-only Folder ID: placeholder before creation, value + copy after. */
 function FolderIdField({ folderId }) {
@@ -225,21 +217,6 @@ function PhotoField({ projectId, photos, onChange, error }) {
  */
 export default function GraphicDetailsStep({ values, setField, errors, projectId, isEdit, options, people }) {
   const err = (f) => errors[f];
-  const platforms = options.platform ?? [];
-  const workTypes = options.work_type ?? [];
-  const selectedPlatform = platforms.find((o) => o.id === values.platform) ?? null;
-  const platformChoices = platforms.filter((o) => o.active || o.id === values.platform);
-
-  // Work types linked to the chosen platform (active; the stored one stays listed).
-  const workTypesFor = (pid) => workTypes.filter((w) => (w.platforms ?? []).includes(pid) && (w.active || w.id === values.workType));
-  const workTypeChoices = values.platform ? workTypesFor(values.platform) : [];
-  const selectedWorkType = workTypeChoices.find((w) => w.id === values.workType) ?? null;
-
-  const choosePlatform = (o) => {
-    const pid = o?.id ?? "";
-    setField("platform", pid);
-    if (values.workType && !workTypesFor(pid).some((w) => w.id === values.workType)) setField("workType", "");
-  };
 
   // Photos use a functional update (uploads finish asynchronously; never a stale list).
   const setPhotos = (update) => setField("photos", (cur) => update(cur ?? []));
@@ -248,52 +225,7 @@ export default function GraphicDetailsStep({ values, setField, errors, projectId
     <div className="flex flex-col gap-4">
       <Section id="sec-graphic-platform" title="Platform & Work Type" subtitle="Select the platform and type of graphic work.">
         <div className="grid gap-4 sm:grid-cols-[1fr_1fr_6.5rem]">
-          <Field id="graphic-platform" title="Platform" required error={err("platform")}>
-            <Combobox
-              id="graphic-platform"
-              value={selectedPlatform}
-              onChange={choosePlatform}
-              options={platformChoices}
-              renderOption={(o) => <PlatformRow o={o} />}
-              renderValue={(o) => <PlatformRow o={o} />}
-              labelledBy="graphic-platform-label"
-              placeholder="Choose"
-              emptyText={platforms.length ? "No matches" : "No platforms yet — ask an admin to add some."}
-              listLabel="Platforms"
-              invalid={!!err("platform")}
-              describedBy="graphic-platform-error"
-            />
-          </Field>
-          <Field
-            id="graphic-work-type"
-            title="Work Type"
-            required
-            error={err("workType")}
-            hint={values.platform && workTypeChoices.length === 0 ? "No work types linked to this platform yet." : undefined}
-          >
-            {values.platform && workTypeChoices.length > 0 ? (
-              <Combobox
-                id="graphic-work-type"
-                value={selectedWorkType}
-                onChange={(o) => setField("workType", o?.id ?? "")}
-                options={workTypeChoices}
-                renderValue={(o) => <span className="truncate">{o.label}</span>}
-                labelledBy="graphic-work-type-label"
-                placeholder="Choose"
-                listLabel="Work types"
-                invalid={!!err("workType")}
-                describedBy="graphic-work-type-error"
-              />
-            ) : (
-              <input
-                id="graphic-work-type"
-                disabled
-                placeholder={values.platform ? "None available" : "Choose a platform first"}
-                className={input}
-                aria-describedby="graphic-work-type-error"
-              />
-            )}
-          </Field>
+          <PlatformWorkTypeFields idPrefix="graphic" values={values} setField={setField} errors={errors} options={options} />
           <Field id="graphic-items" title="Items" required error={err("items")}>
             <input
               id="graphic-items"

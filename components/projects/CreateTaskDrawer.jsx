@@ -9,7 +9,7 @@
 // (lib/tasks/types.js); a type is selectable only if enabled AND in
 // `allowedTypes` (server canCreateTask per type). In edit mode the type is shown
 // but locked.
-// Step 2 · Task Detail (Figma: clip 126:2318, graphic 148:1062): only for types
+// Step 2 · Task Detail (Figma: clip 126:2318, graphic 148:1062, post 152:6): only for types
 // listed in drawer.detailTypes that have a client form here. "Add details" is
 // disabled ("Coming soon") for every other type. Back keeps all values.
 // Saving from Step 1 sends basics only; from Step 2 basics + details in ONE action
@@ -23,6 +23,7 @@ import { buttonClass } from "@/components/ui/Button";
 import Drawer, { useDrawerClose } from "@/components/ui/Drawer";
 import ClipDetailsStep, { emptyClipDetails } from "@/components/tasks/ClipDetailsStep";
 import GraphicDetailsStep, { emptyGraphicDetails } from "@/components/tasks/GraphicDetailsStep";
+import PostDetailsStep, { emptyPostDetails } from "@/components/tasks/PostDetailsStep";
 import { TASK_TITLE_MAX } from "@/lib/projects/rules";
 import { getTaskType, taskTypes } from "@/lib/tasks/types";
 import { FieldError, input, label } from "./ProjectForm";
@@ -33,6 +34,7 @@ const TITLE_ID = "create-task-title";
 const DETAIL_FORMS = {
   clip: { Form: ClipDetailsStep, empty: emptyClipDetails },
   graphic: { Form: GraphicDetailsStep, empty: emptyGraphicDetails },
+  post: { Form: PostDetailsStep, empty: emptyPostDetails },
 };
 
 /** Fields shown on Step 1 (a Step 2 save that fails on these goes back to Step 1). */
