@@ -208,7 +208,8 @@ export default function GraphicDetailsStep({ values, setField, errors, projectId
       </Section>
 
       <Section id="sec-graphic-source" title="Source & Asset" subtitle="Where the files live, plus any photos to work from.">
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* Round 37: Folder ID on its own full-width row, File Location below. */}
+        <div className="flex flex-col gap-4">
           <FolderField
             idPrefix="graphic"
             suffix="G"

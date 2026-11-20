@@ -53,7 +53,8 @@ export default function PhotoDetailsStep({ values, setField, errors, projectId, 
   return (
     <div className="flex flex-col gap-4">
       <Section id="sec-photo-folder" title="Folder & Photo Type" subtitle="Where the photos are kept and what kind of shoot this is.">
-        <div className="grid gap-4 sm:grid-cols-2">
+        {/* Round 37: Folder ID on its own full-width row; name + location below, full width. */}
+        <div className="flex flex-col gap-4">
           <FolderField
             idPrefix="photo"
             suffix="P"

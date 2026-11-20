@@ -60,7 +60,12 @@ export default function CreateTaskDrawer({ returnFocusId, drawer, ...rest }) {
   // disagree (round 35); every other param (filters, an open ?task= panel) stays.
   // Opening is a real navigation (a Link), which renders `drawer` on the server.
   const sp = useSearchParams();
-  const urlOpen = sp.get("newTask") === "1" || !!sp.get("editTask");
+  // Round 37: the server data must be FOR the URL's request — create data for
+  // ?newTask=1, that exact task for ?editTask=<id>. A payload left from an earlier
+  // drawer (closes are shallow) never opens the form with another task's values.
+  const editId = sp.get("editTask");
+  const urlOpen =
+    (sp.get("newTask") === "1" && drawer?.mode === "create") || (!!editId && drawer?.mode === "edit" && drawer.editing?.id === editId);
   const close = () => {
     const { pathname, search, hash } = window.location;
     window.history.replaceState(null, "", `${pathname}${withSearchParams(search, { newTask: null, editTask: null })}${hash}`);
@@ -77,6 +82,9 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
   const editing = drawer.editing;
   const isEdit = !!editing;
   const [step, setStep] = useState(1);
+  // Round 37: once Step 2 has been opened, its values are part of the save even
+  // when the user goes Back and submits from Step 1 (they were silently dropped).
+  const [detailsOpened, setDetailsOpened] = useState(false);
   const [title, setTitle] = useState(editing?.title ?? "");
   const [type, setType] = useState(editing?.type ?? "");
   const [details, setDetails] = useState(() =>
@@ -97,6 +105,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
     if (!detailForm) return;
     // Switching type resets Step 2 values (they belong to one type).
     if (!details || details.__type !== type) setDetails({ ...detailForm.empty(), __type: type });
+    setDetailsOpened(true);
     setStep(2);
   };
 
@@ -128,13 +137,17 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
       const fieldErrors = res?.fieldErrors ?? {};
       setErrors(fieldErrors);
       setFormError(res?.error ?? "Something went wrong.");
-      if (withDetails && STEP1_FIELDS.some((f) => fieldErrors[f])) setStep(1);
+      // Show the step that holds the errors.
+      if (STEP1_FIELDS.some((f) => fieldErrors[f])) setStep(1);
+      else if (withDetails && Object.keys(fieldErrors).length) setStep(2);
     });
   };
 
   const onSubmit = (e) => {
     e.preventDefault();
-    save(step === 2);
+    // Step 2 values go with the save whenever Step 2 was opened for THIS type
+    // (also from Step 1 after Back). Switching the type drops them.
+    save(detailsOpened && !!detailForm && details?.__type === type);
   };
 
   const heading = isEdit ? "Edit Task" : "Create Task";

@@ -139,20 +139,24 @@ export async function createTaskAction(formData) {
   if (extra.errors) return fail(CHECK_FIELDS, extra.errors);
   const { folder: folderSpec, ...more } = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
 
-  // Shared folder (graphic → G, photo → P; round 36). "Choose Folder" links an
+  // Shared folder (graphic → G, photo → P; rounds 36–37; lib/tasks/folders.js).
+  // A Folder ID is issued ONLY for an explicit "New Folder" in Step 2: the ID
+  // and its folder are created here, on the server. "Choose Folder" only links an
   // existing folder of this project (validated by the details parser) and saves
-  // the folder texts on it; "New Folder" (the default, also without Step 2) issues
-  // the next ID AND creates the folder here, on the server only. If the insert
-  // below fails, the new folder is removed and its number skipped (never reused).
+  // the folder texts on it. Step 1 only (no Step 2 posted) → no folder at all.
+  // If the insert below fails, a new folder is removed (its number is skipped).
   let folderId = null;
   let newFolder = false;
-  if (folderSuffixForType(type)) {
-    if (folderSpec?.mode === "choose") {
+  if (folderSuffixForType(type) && folderSpec) {
+    if (folderSpec.mode === "choose") {
       folderId = folderSpec.folderId;
       await TaskFolder.updateOne({ folderId, project: project._id }, { $set: folderSpec.set });
-    } else {
-      folderId = await createTaskFolder(type, { project: project._id, ...(folderSpec?.set ?? {}), createdBy: viewer.id });
+    } else if (folderSpec.mode === "new") {
+      folderId = await createTaskFolder(type, { project: project._id, ...folderSpec.set, createdBy: viewer.id });
       newFolder = !!folderId;
+    } else {
+      // No folder: keep the typed folder texts on the task itself.
+      more.details = await applyFolderTexts(type, null, project, folderSpec.set, more.details);
     }
   }
   // Manually ordered content → append at the end (else ordered by number).
@@ -211,20 +215,29 @@ export async function updateTaskAction(formData) {
   if (Object.keys(errors).length) return fail(CHECK_FIELDS, errors);
 
   const set = { title: parsedTitle.title };
-  // Folder (Graphic / Photo, round 36): keep, or switch to another existing folder
-  // of this project + suffix (validated by the parser) — never a new number. The
-  // folder-level texts go to the folder (all its tasks), or back into the
-  // details of an older task that has no folder.
+  // Folder (Graphic / Photo, rounds 36–37; lib/tasks/folders.js): a task WITH a
+  // folder keeps it or switches to another existing folder of this project +
+  // suffix (validated by the parser) — never a new number. A task WITHOUT one
+  // may get a NEW folder only on an explicit "New Folder" (the parser returns
+  // mode "new" only then). The folder-level texts go to the folder (all its
+  // tasks), or back into the details of a task that has no folder.
   let textsBefore = null;
   let textsAfter = null;
+  let issuedFolderId = null;
   if (extra.values) {
     const { folder, ...values } = extra.values;
     Object.assign(set, values);
     if (folder) {
       textsBefore = await currentFolderTexts(task);
-      const folderId = folder.mode === "choose" ? folder.folderId : (task.folderId ?? null);
-      if (folder.mode === "choose") set.folderId = folderId;
-      set.details = await applyFolderTexts(task.type, folderId, project, folder.set, set.details);
+      let folderId = task.folderId ?? null;
+      if (folder.mode === "choose") folderId = folder.folderId;
+      else if (folder.mode === "new" && !task.folderId) {
+        issuedFolderId = await createTaskFolder(task.type, { project: project._id, ...folder.set, createdBy: viewer.id });
+        folderId = issuedFolderId;
+      }
+      if (folderId !== (task.folderId ?? null)) set.folderId = folderId;
+      // A just-created folder already holds the texts.
+      set.details = issuedFolderId ? set.details : await applyFolderTexts(task.type, folderId, project, folder.set, set.details);
       textsAfter = folder.set;
     }
   }
