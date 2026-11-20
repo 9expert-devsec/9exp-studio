@@ -22,6 +22,7 @@ import { useSearchParams } from "next/navigation";
 import {
   ArrowRightLeft,
   BarChart3,
+  Camera,
   CalendarClock,
   CalendarDays,
   Check,
@@ -410,6 +411,11 @@ function InfoColumn({ panel }) {
             {panel.articleType}
           </Row>
         )}
+        {panel.photoType && (
+          <Row icon={Camera} label="Photo Type">
+            {panel.photoType}
+          </Row>
+        )}
       </dl>
 
       {panel.related && (
@@ -470,9 +476,9 @@ function InfoColumn({ panel }) {
             {panel.workLevelLabel}
           </Row>
         )}
-        {panel.startLabel && (
-          <Row icon={CalendarDays} label="Start Date">
-            {panel.startLabel}
+        {panel.start.label && (
+          <Row icon={CalendarDays} label={panel.start.title}>
+            {panel.start.label}
           </Row>
         )}
         {panel.due.label && (
@@ -485,6 +491,22 @@ function InfoColumn({ panel }) {
             <span className="flex items-center gap-1">
               <span className="font-mono font-semibold">{panel.folderId}</span>
               <CopyButton value={panel.folderId} label="Folder ID" />
+            </span>
+          </Row>
+        )}
+        {panel.folderName && (
+          <Row icon={FolderOpen} label="Folder Name">
+            <span className="flex items-start gap-1">
+              <span className="min-w-0 break-words">{panel.folderName}</span>
+              <CopyButton value={panel.folderName} label="folder name" />
+            </span>
+          </Row>
+        )}
+        {panel.folderLocation && (
+          <Row icon={HardDrive} label="Folder Location">
+            <span className="flex items-start gap-1">
+              <span className="min-w-0 break-all font-mono text-xs">{panel.folderLocation}</span>
+              <CopyButton value={panel.folderLocation} label="folder location" />
             </span>
           </Row>
         )}

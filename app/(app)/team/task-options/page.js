@@ -38,12 +38,12 @@ async function TaskOptionsData({ searchParams }) {
     // How many tasks reference each option (blocks delete).
     Task.aggregate([
       // Every option field a task can hold: clip videoType/platforms, graphic/post
-      // platform/workType, article articleType.
+      // platform/workType, article articleType, photo photoType.
       {
         $project: {
           ids: {
             $concatArrays: [
-              ["$details.videoType", "$details.platform", "$details.workType", "$details.articleType"],
+              ["$details.videoType", "$details.platform", "$details.workType", "$details.articleType", "$details.photoType"],
               { $ifNull: ["$details.platforms", []] },
             ],
           },

@@ -5,13 +5,15 @@
 // keeps everything. Cards: Platform & Work Type · Source & Asset · Brief &
 // References · Related · Work & Assign · Reviewer Assign · Timeline. Option and
 // candidate lists come from the server; the save re-validates all of it
-// (lib/tasks/details.js parseGraphicDetails). The Folder ID is issued by the
-// server at creation and is read-only here.
+// (lib/tasks/details.js parseGraphicDetails). Folder (round 36): FolderField —
+// New Folder (issued by the server at creation) or Choose Folder; File Location
+// is the folder's shared location.
 
 import { useState } from "react";
-import { Check, Copy, FolderOpen, ImagePlus, Loader2, X } from "lucide-react";
+import { ImagePlus, Loader2, X } from "lucide-react";
 import { deleteUnsavedTaskPhotoAction, signTaskPhotoUploadAction } from "@/app/(app)/projects/task-actions";
 import { DateTimeField, Field, ReferenceField, Section } from "@/components/tasks/DetailBlocks";
+import FolderField, { folderShareCount } from "@/components/tasks/FolderField";
 import PersonPicker from "@/components/tasks/PersonPicker";
 import PlatformWorkTypeFields from "@/components/tasks/PlatformWorkTypeFields";
 import RelatedPicker from "@/components/tasks/RelatedPicker";
@@ -31,7 +33,8 @@ export const emptyGraphicDetails = () => ({
   platform: "",
   workType: "",
   items: 1,
-  fileLocation: "",
+  folder: { mode: "new", folderId: "" }, // FolderField (round 36)
+  fileLocation: "", // the folder's shared location
   photos: [], // [{ url, publicId, width, height }]
   brief: "",
   referenceUrl: "",
@@ -45,47 +48,6 @@ export const emptyGraphicDetails = () => ({
   dueDate: "",
   dueTime: "",
 });
-
-/** Read-only Folder ID: placeholder before creation, value + copy after. */
-function FolderIdField({ folderId }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(folderId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked: the ID is still selectable */
-    }
-  };
-  return (
-    <div className="min-w-0">
-      <p id="graphic-folder-id-label" className={label}>Folder ID</p>
-      <div
-        role="group"
-        aria-labelledby="graphic-folder-id-label"
-        className="flex min-h-11 items-center gap-2 rounded-[10px] border border-line bg-card-inset py-1.5 pl-3 pr-1.5 text-sm"
-      >
-        <FolderOpen className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
-        {folderId ? (
-          <>
-            <span className="min-w-0 flex-1 truncate font-mono font-semibold text-fg">{folderId}</span>
-            <button
-              type="button"
-              onClick={copy}
-              aria-label={copied ? "Folder ID copied" : `Copy Folder ID ${folderId}`}
-              className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-fg-muted transition-colors hover:bg-card hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
-            >
-              {copied ? <Check className="size-4 text-success" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
-            </button>
-          </>
-        ) : (
-          <span className="min-w-0 flex-1 text-fg-muted">Assigned automatically when the task is created</span>
-        )}
-      </div>
-    </div>
-  );
-}
 
 /** Cloudinary delivery URL → a small square thumbnail of the same asset. */
 const thumbUrl = (url) => url.replace("/image/upload/", "/image/upload/c_fill,w_160,h_160,f_auto,q_auto/");
@@ -215,8 +177,9 @@ function PhotoField({ projectId, photos, onChange, error }) {
  *           options: { platform: object[], work_type: object[] },
  *           people: { assignee: object[], contentReviewer: object[], designReviewer: object[] } }} props
  */
-export default function GraphicDetailsStep({ values, setField, errors, projectId, isEdit, options, people }) {
+export default function GraphicDetailsStep({ values, setField, errors, projectId, isEdit, options, people, folders = [] }) {
   const err = (f) => errors[f];
+  const shared = folderShareCount(values.folder, values.currentFolderId ?? "", folders);
 
   // Photos use a functional update (uploads finish asynchronously; never a stale list).
   const setPhotos = (update) => setField("photos", (cur) => update(cur ?? []));
@@ -246,8 +209,26 @@ export default function GraphicDetailsStep({ values, setField, errors, projectId
 
       <Section id="sec-graphic-source" title="Source & Asset" subtitle="Where the files live, plus any photos to work from.">
         <div className="grid gap-4 sm:grid-cols-2">
-          <FolderIdField folderId={isEdit ? values.folderId : null} />
-          <Field id="graphic-file-location" title="File Location" error={err("fileLocation")}>
+          <FolderField
+            idPrefix="graphic"
+            suffix="G"
+            isEdit={isEdit}
+            value={values.folder}
+            currentFolderId={values.currentFolderId ?? ""}
+            folders={folders}
+            onChange={(next, row) => {
+              setField("folder", next);
+              // A chosen folder brings its shared location (still editable).
+              if (row) setField("fileLocation", row.location ?? "");
+            }}
+            error={err("folder")}
+          />
+          <Field
+            id="graphic-file-location"
+            title="File Location"
+            error={err("fileLocation")}
+            hint={shared > 1 ? `Shared by ${shared} tasks` : undefined}
+          >
             <input
               id="graphic-file-location"
               maxLength={GRAPHIC_FILE_LOCATION_MAX}

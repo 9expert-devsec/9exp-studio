@@ -36,11 +36,14 @@ const TaskSchema = new mongoose.Schema(
     // relatedCourse / relatedProgram / relatedSkill until next saved), workLevel,
     // contentReviewer, videoReviewer; graphic: platform, workType, items,
     // fileLocation, photos[{ url, publicId, width, height }], brief, referenceUrl,
-    // related, workLevel, contentReviewer, designReviewer). {} = no details yet.
+    // related, workLevel, contentReviewer, designReviewer; photo: photoType,
+    // related, editor). Graphic File Location / Photo Folder Name + Location live
+    // on the TaskFolder. {} = no details yet.
     details: { type: mongoose.Schema.Types.Mixed, default: {} },
-    // Folder ID "YYMM-NNN<suffix>" (lib/tasks/folderId.js), issued once on the
-    // server at creation for types that have a suffix (graphic → G); immutable.
-    folderId: { type: String, default: undefined, immutable: true },
+    // Folder ID "YYMM-NNN<suffix>" (lib/tasks/folderId.js) — the link to a shared
+    // TaskFolder (graphic → G, photo → P; round 36). Several tasks may share one;
+    // Edit may switch it to another folder of the same project + suffix.
+    folderId: { type: String, default: undefined },
     createdBy: { type: ObjectId, ref: "User", required: true },
     // Who made the last write (create / edit / status change / duplicate), from
     // round 33 on; older tasks have none (Task Detail shows only the time).
@@ -51,8 +54,10 @@ const TaskSchema = new mongoose.Schema(
 
 TaskSchema.index({ content: 1, number: 1 }, { unique: true });
 TaskSchema.index({ content: 1, updatedAt: -1 });
-// Unique among tasks that have one (sparse: most types have no Folder ID).
-TaskSchema.index({ folderId: 1 }, { unique: true, sparse: true });
+// Lookups only (sparse: most types have no Folder ID). NOT unique since round 36
+// (shared folders): uniqueness lives on TaskFolder.folderId and the counter. The
+// old unique index is replaced by scripts/migrate-task-folders.mjs.
+TaskSchema.index({ folderId: 1 }, { sparse: true });
 
 const Task = mongoose.models.Task || mongoose.model("Task", TaskSchema);
 

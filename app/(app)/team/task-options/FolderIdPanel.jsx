@@ -94,8 +94,8 @@ export default function FolderIdPanel({ rows }) {
         <div>
           <h2 id="folder-id-heading" className="text-base font-semibold text-fg">Folder ID</h2>
           <p className="mt-0.5 text-sm text-fg-muted">
-            Issued automatically when a task is created (format YYMM-NNN + type). This month ({rows[0].yymm}): set the next number if
-            folders were made by hand.
+            Issued automatically when a task is created with &ldquo;New Folder&rdquo; (format YYMM-NNN + type: G Graphic, P Photo).
+            This month ({rows[0].yymm}): set the next number if folders were made by hand.
           </p>
         </div>
       </div>

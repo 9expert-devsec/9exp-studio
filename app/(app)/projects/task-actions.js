@@ -36,7 +36,9 @@ import { searchRelated } from "@/lib/msdb";
 import { escapeRegex } from "@/lib/projects/rules";
 import { assetRows } from "@/lib/tasks/assetRows";
 import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
-import { issueFolderId } from "@/lib/tasks/folderCounter";
+import { createTaskFolder, discardFolder } from "@/lib/tasks/folderCounter";
+import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
+import TaskFolder from "@/models/TaskFolder";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
 import { ASSET_TASK_TYPE_KEYS, getTaskType, initialStatus, isValidStatus } from "@/lib/tasks/types";
 import Task from "@/models/Task";
@@ -65,6 +67,40 @@ async function loadScope(formData) {
 async function readDetails(formData, type, project, existing, viewer) {
   if (str(formData.get("withDetails")) !== "1") return { skip: true };
   return parseTaskDetails(type, formData.get("details"), { project, existing, viewerId: String(viewer.id) });
+}
+
+/** Folder-level texts as pseudo detail fields (activity diff / folderless tasks). */
+function folderTextFields(type, texts) {
+  if (type === "graphic") return { fileLocation: texts?.location ?? "" };
+  if (type === "photo") return { folderName: texts?.name ?? "", folderLocation: texts?.location ?? "" };
+  return {};
+}
+
+/** A stored task's folder texts: its folder first; Graphic falls back to its legacy details.fileLocation. */
+async function currentFolderTexts(task) {
+  const folder = task.folderId ? await TaskFolder.findOne({ folderId: task.folderId }).select("name location").lean() : null;
+  const d = task.details ?? {};
+  if (task.type === "graphic") return { location: folder?.location || d.fileLocation || "" };
+  return { name: folder?.name || d.folderName || "", location: folder?.location || d.folderLocation || "" };
+}
+
+/**
+ * Save the folder texts: on the folder (scoped to this project; every task in it
+ * sees them), or — a task with no folder — back into its details. Upsert: a task
+ * whose folder hasn't been back-filled yet (scripts/migrate-task-folders.mjs not
+ * run) gets its folder created here instead of losing the texts.
+ */
+async function applyFolderTexts(type, folderId, project, set, details) {
+  const suffix = folderId ? parseFolderId(folderId)?.suffix : null;
+  if (folderId && suffix) {
+    await TaskFolder.updateOne(
+      { folderId, project: project._id },
+      { $set: set, $setOnInsert: { suffix, createdBy: null } },
+      { upsert: true }
+    );
+    return details;
+  }
+  return { ...details, ...folderTextFields(type, set) };
 }
 
 /** A content's tasks, order fields only (scoped to content + project). */
@@ -101,11 +137,24 @@ export async function createTaskAction(formData) {
 
   const extra = await readDetails(formData, type, project, null, viewer);
   if (extra.errors) return fail(CHECK_FIELDS, extra.errors);
-  const more = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
+  const { folder: folderSpec, ...more } = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
 
-  // Folder ID (graphic → "YYMM-NNNG"), issued here on the server only. If the
-  // insert below fails, the number is skipped, never reused.
-  const folderId = await issueFolderId(type);
+  // Shared folder (graphic → G, photo → P; round 36). "Choose Folder" links an
+  // existing folder of this project (validated by the details parser) and saves
+  // the folder texts on it; "New Folder" (the default, also without Step 2) issues
+  // the next ID AND creates the folder here, on the server only. If the insert
+  // below fails, the new folder is removed and its number skipped (never reused).
+  let folderId = null;
+  let newFolder = false;
+  if (folderSuffixForType(type)) {
+    if (folderSpec?.mode === "choose") {
+      folderId = folderSpec.folderId;
+      await TaskFolder.updateOne({ folderId, project: project._id }, { $set: folderSpec.set });
+    } else {
+      folderId = await createTaskFolder(type, { project: project._id, ...(folderSpec?.set ?? {}), createdBy: viewer.id });
+      newFolder = !!folderId;
+    }
+  }
   // Manually ordered content → append at the end (else ordered by number).
   const sortOrder = appendedSortOrder(await siblingTasks(project, content));
 
@@ -125,7 +174,10 @@ export async function createTaskAction(formData) {
     createdBy: viewer.id,
     updatedBy: viewer.id,
   });
-  if (!task) return fail("Could not number this task — please try again.");
+  if (!task) {
+    if (newFolder) await discardFolder(folderId);
+    return fail("Could not number this task — please try again.");
+  }
   await logActivity({ task: task._id, project: project._id, actor: viewer.id, type: "created", data: {} });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
@@ -159,11 +211,30 @@ export async function updateTaskAction(formData) {
   if (Object.keys(errors).length) return fail(CHECK_FIELDS, errors);
 
   const set = { title: parsedTitle.title };
-  if (extra.values) Object.assign(set, extra.values);
+  // Folder (Graphic / Photo, round 36): keep, or switch to another existing folder
+  // of this project + suffix (validated by the parser) — never a new number. The
+  // folder-level texts go to the folder (all its tasks), or back into the
+  // details of an older task that has no folder.
+  let textsBefore = null;
+  let textsAfter = null;
+  if (extra.values) {
+    const { folder, ...values } = extra.values;
+    Object.assign(set, values);
+    if (folder) {
+      textsBefore = await currentFolderTexts(task);
+      const folderId = folder.mode === "choose" ? folder.folderId : (task.folderId ?? null);
+      if (folder.mode === "choose") set.folderId = folderId;
+      set.details = await applyFolderTexts(task.type, folderId, project, folder.set, set.details);
+      textsAfter = folder.set;
+    }
+  }
   await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { ...set, updatedBy: viewer.id } });
 
-  // Activity: what actually changed (nothing → no entry).
-  await logActivity(editEntries(task, { ...task, ...set }, { actor: viewer.id }));
+  // Activity: what actually changed (nothing → no entry). Folder texts are
+  // compared as pseudo details ("File Location", "Folder Name", "Folder Location").
+  const before = textsBefore ? { ...task, details: { ...task.details, ...folderTextFields(task.type, textsBefore) } } : task;
+  const after = { ...task, ...set, ...(textsAfter ? { details: { ...set.details, ...folderTextFields(task.type, textsAfter) } } : {}) };
+  await logActivity(editEntries(before, after, { actor: viewer.id }));
 
   // Photos removed in the form are deleted from Cloudinary only now, after the
   // save (so Cancel never loses a saved photo).
@@ -259,8 +330,9 @@ export async function reorderTasksAction(projectId, contentId, orderedIds) {
 
 /**
  * Duplicate a task (lib/tasks/duplicate.js): same content, next task number,
- * placed right after the original; status reset, " (copy)", no photos, a NEW
- * Folder ID for types that issue one. Same permission as creating that type here.
+ * placed right after the original; status reset, " (copy)", no photos, the SAME
+ * folder as the original (round 36: no new Folder ID). Same permission as
+ * creating that type here.
  */
 export async function duplicateTaskAction(formData) {
   const scope = await loadScope(formData);
@@ -274,8 +346,7 @@ export async function duplicateTaskAction(formData) {
     return fail(`You can't create ${getTaskType(task.type)?.label ?? task.type} tasks in this project.`);
   }
 
-  const folderId = await issueFolderId(task.type);
-  const copy = await createNumbered(TASK_SEQ, content._id, buildTaskCopy(task, { createdBy: viewer.id, folderId }));
+  const copy = await createNumbered(TASK_SEQ, content._id, buildTaskCopy(task, { createdBy: viewer.id }));
   if (!copy) return fail("Could not number this task — please try again.");
   await logActivity({ task: copy._id, project: project._id, actor: viewer.id, type: "created", data: { duplicatedFrom: task.title } });
 

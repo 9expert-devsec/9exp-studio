@@ -170,6 +170,7 @@ export async function deleteTaskOptionAction(formData) {
       { "details.platform": option._id },
       { "details.workType": option._id },
       { "details.articleType": option._id },
+      { "details.photoType": option._id },
     ],
   });
   if (used > 0) {

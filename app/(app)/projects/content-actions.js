@@ -27,7 +27,6 @@ import { CONTENT_SEQ, createNumbered, ensureSeq, nextSeq } from "@/lib/projects/
 import { parseContentForm } from "@/lib/projects/validate";
 import { buildContentCopy, buildTaskCopy } from "@/lib/tasks/duplicate";
 import { deleteActivity, logActivity } from "@/lib/tasks/activity";
-import { issueFolderId } from "@/lib/tasks/folderCounter";
 import { getTaskType } from "@/lib/tasks/types";
 import Content from "@/models/Content";
 import Task from "@/models/Task";
@@ -74,9 +73,9 @@ export async function reorderContentAction(projectId, orderedIds) {
  * Duplicate a content item AND all its tasks (lib/tasks/duplicate.js), in ONE
  * MongoDB transaction: a failure leaves no half-copied content. The new item gets
  * the next content number and sits right after the original; its tasks keep the
- * original's order, numbered 1..n, each reset like a task duplicate (Graphic: a
- * NEW Folder ID). Numbers (content number, Folder IDs) are taken BEFORE the
- * transaction: an aborted copy just skips them (never reused).
+ * original's order, numbered 1..n, each reset like a task duplicate (Graphic /
+ * Photo: the SAME shared folder, round 36). The content number is taken BEFORE
+ * the transaction: an aborted copy just skips it (never reused).
  * Permission: may add content here AND may create every task type being copied.
  */
 export async function duplicateContentAction(formData) {
@@ -97,8 +96,7 @@ export async function duplicateContentAction(formData) {
 
   const number = await nextSeq(CONTENT_SEQ, project._id);
   if (!number) return fail("Could not number this item — please try again.");
-  const folderIds = [];
-  for (const t of tasks) folderIds.push(await issueFolderId(t.type)); // in order: copies get ascending IDs
+  // Copies keep their original's shared folder (round 36; buildTaskCopy): no new Folder IDs.
 
   const session = await mongoose.startSession();
   let newId = null;
@@ -113,7 +111,7 @@ export async function duplicateContentAction(formData) {
       if (tasks.length) {
         copies = await Task.insertMany(
           tasks.map((t, i) => ({
-            ...buildTaskCopy(t, { createdBy: viewer.id, content: created._id, folderId: folderIds[i] }),
+            ...buildTaskCopy(t, { createdBy: viewer.id, content: created._id }),
             number: i + 1,
             sortOrder: i + 1,
           })),
