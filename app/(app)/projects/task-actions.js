@@ -27,7 +27,8 @@ import {
 } from "@/lib/projects/access";
 import { recomputeRollups } from "@/lib/projects/progress";
 import { loadTaskPanel } from "@/lib/projects/queries";
-import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
+import { TASK_SEQ, createNumbered, ensureSeq, logDuplicateKey } from "@/lib/projects/sequence";
+import { DuplicateKeyError, duplicateKeyKind, duplicateKeyMessage } from "@/lib/projects/dupKey";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
 import { buildTaskCopy } from "@/lib/tasks/duplicate";
@@ -165,22 +166,30 @@ export async function createTaskAction(formData) {
   // Manually ordered content → append at the end (else ordered by number).
   const sortOrder = appendedSortOrder(await siblingTasks(project, content));
 
-  const task = await createNumbered(TASK_SEQ, content._id, {
-    ...(folderId ? { folderId } : {}),
-    ...(sortOrder ? { sortOrder } : {}),
-    project: project._id,
-    content: content._id,
-    title,
-    type,
-    status,
-    assetStatus: null, // post: derived at read time (lib/tasks/assets.js), never stored
-    assignee: more.assignee,
-    startAt: more.startAt,
-    dueAt: more.dueAt,
-    details: more.details,
-    createdBy: viewer.id,
-    updatedBy: viewer.id,
-  });
+  let task;
+  try {
+    task = await createNumbered(TASK_SEQ, content._id, {
+      ...(folderId ? { folderId } : {}),
+      ...(sortOrder ? { sortOrder } : {}),
+      project: project._id,
+      content: content._id,
+      title,
+      type,
+      status,
+      assetStatus: null, // post: derived at read time (lib/tasks/assets.js), never stored
+      assignee: more.assignee,
+      startAt: more.startAt,
+      dueAt: more.dueAt,
+      details: more.details,
+      createdBy: viewer.id,
+      updatedBy: viewer.id,
+    });
+  } catch (err) {
+    // A non-numbering unique clash (round 39): its own message, never "Could not number".
+    if (!(err instanceof DuplicateKeyError)) throw err;
+    if (newFolder) await discardFolder(folderId);
+    return fail(duplicateKeyMessage(err.kind));
+  }
   if (!task) {
     if (newFolder) await discardFolder(folderId);
     return fail("Could not number this task — please try again.");
@@ -246,7 +255,15 @@ export async function updateTaskAction(formData) {
       textsAfter = folder.set;
     }
   }
-  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { ...set, updatedBy: viewer.id } });
+  try {
+    await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { ...set, updatedBy: viewer.id } });
+  } catch (err) {
+    // e.g. switching to a shared folder while a stale unique folderId index exists (round 39).
+    const kind = duplicateKeyKind(err, TASK_SEQ.childKey);
+    if (!kind) throw err;
+    if (issuedFolderId) await discardFolder(issuedFolderId);
+    return fail(duplicateKeyMessage(logDuplicateKey(TASK_SEQ, err, kind).kind));
+  }
 
   // Activity: what actually changed (nothing → no entry). Folder texts are
   // compared as pseudo details ("File Location", "Folder Name", "Folder Location").
@@ -366,7 +383,13 @@ export async function duplicateTaskAction(formData) {
     return fail(`You can't create ${getTaskType(task.type)?.label ?? task.type} tasks in this project.`);
   }
 
-  const copy = await createNumbered(TASK_SEQ, content._id, buildTaskCopy(task, { createdBy: viewer.id }));
+  let copy;
+  try {
+    copy = await createNumbered(TASK_SEQ, content._id, buildTaskCopy(task, { createdBy: viewer.id }));
+  } catch (err) {
+    if (!(err instanceof DuplicateKeyError)) throw err;
+    return fail(duplicateKeyMessage(err.kind));
+  }
   if (!copy) return fail("Could not number this task — please try again.");
   await logActivity({ task: copy._id, project: project._id, actor: viewer.id, type: "created", data: { duplicatedFrom: task.title } });
 

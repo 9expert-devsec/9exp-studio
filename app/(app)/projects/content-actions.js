@@ -24,6 +24,7 @@ import {
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
 import { recomputeRollups } from "@/lib/projects/progress";
 import { CONTENT_SEQ, createNumbered, ensureSeq, nextSeq } from "@/lib/projects/sequence";
+import { duplicateKeyKind, duplicateKeyMessage } from "@/lib/projects/dupKey";
 import { parseContentForm } from "@/lib/projects/validate";
 import { buildContentCopy, buildTaskCopy } from "@/lib/tasks/duplicate";
 import { deleteActivity, logActivity } from "@/lib/tasks/activity";
@@ -123,7 +124,9 @@ export async function duplicateContentAction(formData) {
       await Content.bulkWrite(orderWrites(ids, { project: project._id }), { session });
     });
   } catch (err) {
-    console.error(`[content] duplicate failed: ${err?.message ?? "unknown error"}`);
+    console.error(`[content] duplicate failed: ${err?.message ?? "unknown error"}`, err?.code === 11000 ? { keyPattern: err.keyPattern, keyValue: err.keyValue } : "");
+    // A stale unique folderId index blocks copies that share a folder (round 39).
+    if (duplicateKeyKind(err, "content") === "folder") return fail(duplicateKeyMessage("folder"));
     return fail("Could not duplicate this content — nothing was copied. Please try again.");
   } finally {
     await session.endSession();
