@@ -11,8 +11,18 @@ const { ObjectId } = mongoose.Schema.Types;
 //   assignee_changed { from, to }                   — user ids
 //   reviewer_changed { role, from, to }             — role label + user ids
 //   assets_changed   { added, removed }             — Post/Article related assets
+//   people_changed   { role, added: [name], removed: [name] } — Production
+//                    Videographers / Presenters (round 38; names stored)
 // Deleted with the task (and with its content).
-export const ACTIVITY_TYPES = ["created", "status_changed", "updated", "assignee_changed", "reviewer_changed", "assets_changed"];
+export const ACTIVITY_TYPES = [
+  "created",
+  "status_changed",
+  "updated",
+  "assignee_changed",
+  "reviewer_changed",
+  "assets_changed",
+  "people_changed",
+];
 
 const TaskActivitySchema = new mongoose.Schema(
   {

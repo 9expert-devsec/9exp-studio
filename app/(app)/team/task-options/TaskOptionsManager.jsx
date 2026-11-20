@@ -23,6 +23,7 @@ import {
   toggleTaskOptionAction,
   updateTaskOptionAction,
 } from "./actions";
+import OptionTabs from "./OptionTabs";
 
 const LABEL_MAX = 60;
 const BASE = "/team/task-options";
@@ -43,7 +44,7 @@ function PlatformChip({ p }) {
   );
 }
 
-export default function TaskOptionsManager({ listKey, platformFilter = null, lists, options, marks }) {
+export default function TaskOptionsManager({ listKey, platformFilter = null, lists, extraTabs = [], options, marks }) {
   const list = lists.find((l) => l.key === listKey) ?? lists[0];
   const allRows = options[list.key] ?? [];
   const platforms = options.platform ?? []; // every platform option, in list order
@@ -87,24 +88,7 @@ export default function TaskOptionsManager({ listKey, platformFilter = null, lis
         </button>
       </div>
 
-      <nav aria-label="Option lists" className="-mx-1 overflow-x-auto px-1 pb-1">
-        <ul className="inline-flex gap-1 whitespace-nowrap rounded-full border border-control-line bg-control p-1">
-          {lists.map((l) => (
-            <li key={l.key}>
-              <Link
-                href={`${BASE}?list=${l.key}`}
-                scroll={false}
-                aria-current={l.key === list.key ? "page" : undefined}
-                className={`inline-flex min-h-9 items-center rounded-full px-4 text-sm font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500 ${
-                  l.key === list.key ? "bg-brand-500 text-navy" : "text-fg-muted hover:text-fg"
-                }`}
-              >
-                {l.label}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <OptionTabs tabs={[...lists, ...extraTabs]} current={list.key} />
 
       {list.hasPlatforms && allRows.length > 0 && (
         <nav aria-label="Filter by platform">

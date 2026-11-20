@@ -41,6 +41,7 @@ import {
   Link2,
   ListChecks,
   Loader2,
+  Mic,
   MonitorSmartphone,
   Pencil,
   PlayCircle,
@@ -49,6 +50,7 @@ import {
   Shapes,
   UserCheck,
   UserRound,
+  Video,
   X,
 } from "lucide-react";
 import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
@@ -328,6 +330,53 @@ function PersonValue({ person }) {
   );
 }
 
+/** Production people: accounts with avatars; external presenters with initials + "External". */
+function PeopleList({ people, empty }) {
+  if (!people.length) return <span className="text-fg-muted">{empty}</span>;
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {people.map((p, i) => (
+        <li key={`${p.external ? "x" : "u"}:${p.id}:${i}`} className="flex min-w-0 items-center gap-2">
+          {p.external ? (
+            <span aria-hidden="true" className="flex size-6 shrink-0 items-center justify-center rounded-full bg-track text-[10px] font-semibold text-fg-muted">
+              {initials(p.name)}
+            </span>
+          ) : (
+            <Avatar name={p.name} url={p.avatarUrl} size={24} />
+          )}
+          <span className="truncate">{p.name}</span>
+          {p.external && <span className="shrink-0 rounded-full bg-track px-2 py-0.5 text-[10px] font-semibold text-fg-muted">External</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+const initials = (name) =>
+  String(name ?? "")
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((w) => w[0] ?? "")
+    .join("")
+    .toUpperCase() || "?";
+
+/** An http(s) link that opens in a new tab. */
+function ExternalUrl({ href }) {
+  return (
+    <a
+      href={href}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="inline-flex max-w-full items-center gap-1.5 rounded break-all text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
+    >
+      <span className="min-w-0">{href}</span>
+      <ExternalLink className="size-3.5 shrink-0" aria-hidden="true" />
+      <span className="sr-only">(opens in a new tab)</span>
+    </a>
+  );
+}
+
 function Description({ text }) {
   const [expanded, setExpanded] = useState(false);
   const long = text.length > 220 || text.split("\n").length > 3;
@@ -463,9 +512,31 @@ function InfoColumn({ panel }) {
       )}
 
       <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
-        <Row icon={UserRound} label={panel.assignee.title}>
-          <PersonValue person={panel.assignee.person} />
-        </Row>
+        {panel.videographers ? (
+          // Production (round 38): the first Videographer is the task's assignee.
+          <>
+            <Row icon={Video} label={panel.videographers.length === 1 ? "Videographer" : "Videographers"}>
+              <PeopleList people={panel.videographers} empty="Unassigned" />
+            </Row>
+            <Row icon={Mic} label={panel.presenters.length === 1 ? "Presenter" : "Presenters"}>
+              <PeopleList people={panel.presenters} empty="None" />
+            </Row>
+          </>
+        ) : (
+          <Row icon={UserRound} label={panel.assignee.title}>
+            <PersonValue person={panel.assignee.person} />
+          </Row>
+        )}
+        {panel.scriptUrl && (
+          <Row icon={Link2} label="Script Reference">
+            <ExternalUrl href={panel.scriptUrl} />
+          </Row>
+        )}
+        {panel.recordUrl && (
+          <Row icon={Link2} label="File Record">
+            <ExternalUrl href={panel.recordUrl} />
+          </Row>
+        )}
         {panel.reviewers.map((r) => (
           <Row key={r.title} icon={UserCheck} label={r.title}>
             <PersonValue person={r.person} />

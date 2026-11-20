@@ -3,8 +3,10 @@ import { notFound } from "next/navigation";
 import TableSkeleton from "@/components/team/TableSkeleton";
 import { getSuperadmin } from "@/lib/team";
 import { PLATFORM_MARKS, TASK_OPTION_LISTS } from "@/lib/tasks/options";
+import ExternalPerson from "@/models/ExternalPerson";
 import Task from "@/models/Task";
 import TaskOption from "@/models/TaskOption";
+import ExternalPresentersManager from "./ExternalPresentersManager";
 import { readMsdbSyncState } from "@/lib/msdbSync";
 import { formatUpdatedAt } from "@/lib/projects/format";
 import { loadFolderIdPanel } from "@/lib/tasks/folderCounter";
@@ -28,9 +30,13 @@ export default function TaskOptionsPage({ searchParams }) {
   );
 }
 
+// Round 38: a tab that isn't a TaskOption list (its own model and manager).
+const EXTERNAL_TAB = { key: "external_presenters", label: "External Presenters" };
+
 async function TaskOptionsData({ searchParams }) {
   if (!(await getSuperadmin())) notFound();
   const sp = await searchParams;
+  if (sp?.list === EXTERNAL_TAB.key) return <ExternalPresentersData />;
   const listKey = TASK_OPTION_LISTS.some((l) => l.key === sp?.list) ? sp.list : TASK_OPTION_LISTS[0].key;
 
   const [options, usage, syncState, folderIds] = await Promise.all([
@@ -91,12 +97,41 @@ async function TaskOptionsData({ searchParams }) {
         listKey={listKey}
         platformFilter={platformFilter}
         lists={TASK_OPTION_LISTS}
+        extraTabs={[EXTERNAL_TAB]}
         options={lists}
         marks={PLATFORM_MARKS.map(({ key, label }) => ({ key, label }))}
       />
       <FolderIdPanel rows={folderIds} />
       <MsdbSyncPanel status={syncStatusView(syncState)} />
     </div>
+  );
+}
+
+/** External Presenters tab: every saved person (name order) + how many tasks use them. */
+async function ExternalPresentersData() {
+  const [people, usage] = await Promise.all([
+    ExternalPerson.find().sort({ name: 1 }).lean(),
+    Task.aggregate([
+      { $match: { "details.presenters.kind": "external" } },
+      { $unwind: "$details.presenters" },
+      { $match: { "details.presenters.kind": "external" } },
+      { $group: { _id: "$details.presenters.id", tasks: { $addToSet: "$_id" } } },
+      { $project: { n: { $size: "$tasks" } } },
+    ]),
+  ]);
+  const usedBy = new Map(usage.map((u) => [String(u._id), u.n]));
+  return (
+    <ExternalPresentersManager
+      tabs={[...TASK_OPTION_LISTS.map(({ key, label }) => ({ key, label })), EXTERNAL_TAB]}
+      current={EXTERNAL_TAB.key}
+      people={people.map((p) => ({
+        id: p._id.toString(),
+        name: p.name,
+        note: p.note ?? "",
+        active: !!p.active,
+        usedBy: usedBy.get(p._id.toString()) ?? 0,
+      }))}
+    />
   );
 }
 

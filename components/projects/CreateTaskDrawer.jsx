@@ -10,7 +10,7 @@
 // `allowedTypes` (server canCreateTask per type). In edit mode the type is shown
 // but locked.
 // Step 2 · Task Detail (Figma: clip 126:2318, graphic 148:1062, post 152:6,
-// article 169:698, photo 169:963): only for types
+// article 169:698, photo 169:963, production 208:185): only for types
 // listed in drawer.detailTypes that have a client form here. "Add details" is
 // disabled ("Coming soon") for every other type. Back keeps all values.
 // Saving from Step 1 sends basics only; from Step 2 basics + details in ONE action
@@ -29,6 +29,7 @@ import GraphicDetailsStep, { emptyGraphicDetails } from "@/components/tasks/Grap
 import PostDetailsStep, { emptyPostDetails } from "@/components/tasks/PostDetailsStep";
 import ArticleDetailsStep, { emptyArticleDetails } from "@/components/tasks/ArticleDetailsStep";
 import PhotoDetailsStep, { emptyPhotoDetails } from "@/components/tasks/PhotoDetailsStep";
+import ProductionDetailsStep, { emptyProductionDetails } from "@/components/tasks/ProductionDetailsStep";
 import { TASK_TITLE_MAX } from "@/lib/projects/rules";
 import { getTaskType, taskTypes } from "@/lib/tasks/types";
 import { FieldError, input, label } from "./ProjectForm";
@@ -42,6 +43,7 @@ const DETAIL_FORMS = {
   post: { Form: PostDetailsStep, empty: emptyPostDetails },
   article: { Form: ArticleDetailsStep, empty: emptyArticleDetails },
   photo: { Form: PhotoDetailsStep, empty: emptyPhotoDetails },
+  production: { Form: ProductionDetailsStep, empty: emptyProductionDetails },
 };
 
 /** Fields shown on Step 1 (a Step 2 save that fails on these goes back to Step 1). */
@@ -214,6 +216,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
                 options={drawer.options}
                 people={drawer.people[type]}
                 folders={drawer.folders?.[type] ?? []}
+                externals={drawer.externals ?? []}
               />
             )}
           </>

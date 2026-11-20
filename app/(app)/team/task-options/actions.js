@@ -13,6 +13,8 @@ import { setNextFolderNumber } from "@/lib/tasks/folderCounter";
 import { escapeRegex } from "@/lib/projects/rules";
 import { authorizeSuperadmin } from "@/lib/team";
 import { PLATFORM_MARK_KEYS, TASK_OPTION_LABEL_MAX, WORK_TYPE_PLATFORMS_MAX, getOptionList } from "@/lib/tasks/options";
+import { EXTERNAL_NAME_MAX, EXTERNAL_NOTE_MAX, cleanExternalName, externalNameKey } from "@/lib/tasks/production";
+import ExternalPerson from "@/models/ExternalPerson";
 import Task from "@/models/Task";
 import TaskOption from "@/models/TaskOption";
 
@@ -197,6 +199,69 @@ export async function setNextFolderNumberAction(formData) {
   if (!res.ok) return fail(res.error);
   refresh();
   return { ok: true, nextId: res.nextId };
+}
+
+// ── External Presenters (round 38) ───────────────────────────────────────
+
+async function findExternalPerson(formData) {
+  const id = str(formData.get("id"));
+  if (!mongoose.isValidObjectId(id)) return null;
+  return ExternalPerson.findById(id).lean();
+}
+
+/** Tasks whose Presenters include this external person. */
+const externalUsage = (id) => Task.countDocuments({ "details.presenters": { $elemMatch: { kind: "external", id } } });
+
+/** Rename + note. The new name's nameKey must stay unique (case/space-insensitive). */
+export async function updateExternalPersonAction(formData) {
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
+
+  const person = await findExternalPerson(formData);
+  if (!person) return fail("That person no longer exists.");
+  const name = cleanExternalName(formData.get("name"));
+  if (!name) return fail("Name is required.");
+  if (name.length > EXTERNAL_NAME_MAX) return fail(`Use at most ${EXTERNAL_NAME_MAX} characters.`);
+  const note = str(formData.get("note")).trim();
+  if (note.length > EXTERNAL_NOTE_MAX) return fail(`Keep the note to ${EXTERNAL_NOTE_MAX} characters.`);
+  const nameKey = externalNameKey(name);
+  if (await ExternalPerson.exists({ nameKey, _id: { $ne: person._id } })) return fail(`“${name}” already exists.`);
+  try {
+    await ExternalPerson.updateOne({ _id: person._id }, { $set: { name, nameKey, note } });
+  } catch (err) {
+    if (err?.code === 11000) return fail(`“${name}” already exists.`);
+    throw err;
+  }
+  refresh();
+  return { ok: true };
+}
+
+/** Active ↔ inactive (inactive: hidden from the picker, still shown on tasks). */
+export async function toggleExternalPersonAction(formData) {
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
+
+  const person = await findExternalPerson(formData);
+  if (!person) return fail("That person no longer exists.");
+  await ExternalPerson.updateOne({ _id: person._id }, { $set: { active: !person.active } });
+  refresh();
+  return { ok: true };
+}
+
+/** Delete, only while no task uses them (else suggest deactivating). */
+export async function deleteExternalPersonAction(formData) {
+  const caller = await authorizeSuperadmin();
+  if (caller.error) return fail(caller.error);
+
+  const person = await findExternalPerson(formData);
+  if (!person) return fail("That person no longer exists.");
+  const used = await externalUsage(person._id);
+  if (used > 0) {
+    return fail(`${used} task${used === 1 ? " uses" : "s use"} “${person.name}”, so they can't be deleted. Deactivate them instead.`);
+  }
+  await ExternalPerson.deleteOne({ _id: person._id });
+  refresh();
+  return { ok: true };
 }
 
 /** "Sync now": refresh the MSDB mirror (Related pickers) from the MSDB API. */

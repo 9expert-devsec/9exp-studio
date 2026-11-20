@@ -122,7 +122,8 @@ export function ContentCard({ content }) {
   );
 }
 
-function TaskPerson({ label, person }) {
+/** `extra` (Production): "+N" other videographers / account presenters. */
+function TaskPerson({ label, person, extra = 0 }) {
   return (
     <div className="flex min-w-0 items-center gap-2">
       {person ? (
@@ -132,7 +133,15 @@ function TaskPerson({ label, person }) {
       )}
       <div className="min-w-0">
         <p className="text-[10px] text-fg-muted">{label}</p>
-        <p className="truncate text-xs font-medium text-fg">{person?.name ?? "Unassigned"}</p>
+        <p className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-fg">
+          <span className="truncate">{person?.name ?? "Unassigned"}</span>
+          {extra > 0 && (
+            <span className="shrink-0 rounded-full bg-track px-1.5 py-px text-[10px] font-semibold text-fg-muted">
+              +{extra}
+              <span className="sr-only"> more {extra === 1 ? "person" : "people"}</span>
+            </span>
+          )}
+        </p>
       </div>
     </div>
   );
@@ -225,7 +234,7 @@ function TaskCardBody({ task, showDue }) {
       )}
       <div className="grid grid-cols-2 gap-3 border-t border-line-subtle pt-3">
         <TaskPerson label="Created by" person={task.createdBy} />
-        <TaskPerson label="Assigned to" person={task.assignee} />
+        <TaskPerson label="Assigned to" person={task.assignee} extra={task.extraPeople ?? 0} />
       </div>
     </div>
   );

@@ -33,10 +33,10 @@ export function Field({ id, title, required, hint, error, children }) {
 }
 
 /** Optional http(s) link with a link icon and, once valid, an "open in new tab" button. */
-export function ReferenceField({ id, value, onChange, error }) {
+export function ReferenceField({ id, value, onChange, error, title = "Reference (Optional)" }) {
   const href = value && isHttpUrl(value.trim()) ? value.trim() : null;
   return (
-    <Field id={id} title="Reference (Optional)" error={error}>
+    <Field id={id} title={title} error={error}>
       <div className="relative">
         <Link2 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
         <input

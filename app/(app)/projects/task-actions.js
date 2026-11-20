@@ -31,7 +31,8 @@ import { TASK_SEQ, createNumbered, ensureSeq } from "@/lib/projects/sequence";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
 import { buildTaskCopy } from "@/lib/tasks/duplicate";
-import { deleteActivity, editEntries, loadActivityPage, logActivity } from "@/lib/tasks/activity";
+import { deleteActivity, editEntries, editPeopleKeys, loadActivityPage, logActivity } from "@/lib/tasks/activity";
+import { peopleNames, resolvePresenters } from "@/lib/tasks/externalPeople";
 import { searchRelated } from "@/lib/msdb";
 import { escapeRegex } from "@/lib/projects/rules";
 import { assetRows } from "@/lib/tasks/assetRows";
@@ -138,6 +139,8 @@ export async function createTaskAction(formData) {
   const extra = await readDetails(formData, type, project, null, viewer);
   if (extra.errors) return fail(CHECK_FIELDS, extra.errors);
   const { folder: folderSpec, ...more } = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
+  // Production: new external presenter names → saved ExternalPerson ids (reused by nameKey).
+  if (type === "production" && extra.values) more.details.presenters = await resolvePresenters(more.details.presenters, viewer.id);
 
   // Shared folder (graphic → G, photo → P; rounds 36–37; lib/tasks/folders.js).
   // A Folder ID is issued ONLY for an explicit "New Folder" in Step 2: the ID
@@ -226,6 +229,8 @@ export async function updateTaskAction(formData) {
   let issuedFolderId = null;
   if (extra.values) {
     const { folder, ...values } = extra.values;
+    // Production: new external presenter names → saved ExternalPerson ids (reused by nameKey).
+    if (task.type === "production") values.details.presenters = await resolvePresenters(values.details.presenters, viewer.id);
     Object.assign(set, values);
     if (folder) {
       textsBefore = await currentFolderTexts(task);
@@ -247,7 +252,9 @@ export async function updateTaskAction(formData) {
   // compared as pseudo details ("File Location", "Folder Name", "Folder Location").
   const before = textsBefore ? { ...task, details: { ...task.details, ...folderTextFields(task.type, textsBefore) } } : task;
   const after = { ...task, ...set, ...(textsAfter ? { details: { ...set.details, ...folderTextFields(task.type, textsAfter) } } : {}) };
-  await logActivity(editEntries(before, after, { actor: viewer.id }));
+  const peopleKeys = editPeopleKeys(before, after);
+  const names = peopleKeys.length ? await peopleNames(peopleKeys) : undefined;
+  await logActivity(editEntries(before, after, { actor: viewer.id, names }));
 
   // Photos removed in the form are deleted from Cloudinary only now, after the
   // save (so Cancel never loses a saved photo).
