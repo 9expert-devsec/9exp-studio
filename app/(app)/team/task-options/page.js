@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import TableSkeleton from "@/components/team/TableSkeleton";
-import { getSuperadmin } from "@/lib/team";
+import { getFullAccessUser } from "@/lib/team";
 import { PLATFORM_MARKS, TASK_OPTION_LISTS } from "@/lib/tasks/options";
 import ExternalPerson from "@/models/ExternalPerson";
 import Task from "@/models/Task";
@@ -21,7 +21,7 @@ export const metadata = {
 // Admin-managed task option lists (lib/tasks/options.js: Video Type · Platform ·
 // Work Type · Article Type · Photo Type). Lives under Team
 // Management because the shell has no separate settings/admin area.
-// Superadmin only (the /team layout gates too; the page checks its own data).
+// Full access only — superadmin or manager (the /team layout gates too; the page checks its own data).
 export default function TaskOptionsPage({ searchParams }) {
   return (
     <Suspense fallback={<TableSkeleton />}>
@@ -34,7 +34,7 @@ export default function TaskOptionsPage({ searchParams }) {
 const EXTERNAL_TAB = { key: "external_presenters", label: "External Presenters" };
 
 async function TaskOptionsData({ searchParams }) {
-  if (!(await getSuperadmin())) notFound();
+  if (!(await getFullAccessUser())) notFound();
   const sp = await searchParams;
   if (sp?.list === EXTERNAL_TAB.key) return <ExternalPresentersData />;
   const listKey = TASK_OPTION_LISTS.some((l) => l.key === sp?.list) ? sp.list : TASK_OPTION_LISTS[0].key;

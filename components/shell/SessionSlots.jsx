@@ -4,17 +4,19 @@
 import mongoose from "mongoose";
 import { auth } from "@/auth";
 import dbConnect from "@/lib/db";
+import { isFullAccess } from "@/lib/permissionRules";
 import { signOutAction } from "@/lib/session-actions";
 import Role from "@/models/Role";
 import User from "@/models/User";
 import TeamNavLink from "./TeamNavLink";
 import UserMenu from "./UserMenu";
 
-// Display only: hides the link from non-superadmins. Access itself is enforced
-// server-side by app/(app)/team/** (pages and actions re-read the role from the DB).
+// Display only: hides the link from anyone without full access (superadmin or
+// manager). Access itself is enforced server-side by app/(app)/team/** (pages and
+// actions re-read the role from the DB).
 export async function TeamNavItem() {
   const session = await auth();
-  if (session?.user?.role !== "superadmin") return null;
+  if (!isFullAccess(session?.user)) return null;
   return <TeamNavLink />;
 }
 

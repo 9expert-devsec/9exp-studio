@@ -16,6 +16,7 @@ import {
   td,
   th,
 } from "@/components/team/styles";
+import { isFullAccessRole } from "@/lib/permissionRules";
 import { createRoleAction, deleteRoleAction, updateRoleAction } from "./actions";
 
 // Mirrors models/Role.js (not imported: that module pulls Mongoose into the client).
@@ -36,14 +37,16 @@ function slugify(name) {
 }
 
 function deleteBlockReason(role) {
-  if (role.isSystem) return "System role: cannot be deleted.";
+  if (role.isSystem || isFullAccessRole(role.key)) return "System role: cannot be deleted.";
   if (role.accountCount > 0) {
     return `In use by ${role.accountCount} account${role.accountCount === 1 ? "" : "s"}.`;
   }
   return null;
 }
 
-const SUPERADMIN_KEY = "superadmin";
+// Superadmin and Manager have full access fixed in code (lib/permissionRules.js):
+// their Role settings are never read, so they are shown, not edited.
+const FULL_ACCESS_LABEL = "Full access";
 
 /** Short summary for the table: "All" (not configured) or the chosen labels. */
 function settingSummary(keys, options) {
@@ -124,10 +127,10 @@ export default function RolesManager({ roles, taskTypeOptions, permissionOptions
                       {role.description || <span className="text-fg-muted">—</span>}
                     </td>
                     <td className={`${td} max-w-48 text-xs text-fg-muted`}>
-                      {role.key === SUPERADMIN_KEY ? "All (always)" : settingSummary(role.taskTypes, taskTypeOptions)}
+                      {isFullAccessRole(role.key) ? FULL_ACCESS_LABEL : settingSummary(role.taskTypes, taskTypeOptions)}
                     </td>
                     <td className={`${td} max-w-40 text-xs text-fg-muted`}>
-                      {role.key === SUPERADMIN_KEY ? "All (always)" : settingSummary(role.permissions, permissionOptions)}
+                      {isFullAccessRole(role.key) ? FULL_ACCESS_LABEL : settingSummary(role.permissions, permissionOptions)}
                     </td>
                     <td className={`${td} text-right tabular-nums`}>{role.accountCount}</td>
                     <td className={`${td} text-right`}>
@@ -241,7 +244,7 @@ function SettingField({ legend, hint, name, options, value, onChange }) {
 // Add when `role` is undefined; edit otherwise (key stays locked).
 function RoleForm({ role, existingKeys = [], onDone, taskTypeOptions, permissionOptions }) {
   const isEdit = !!role;
-  const isSuperadmin = role?.key === SUPERADMIN_KEY;
+  const fullAccess = isEdit && isFullAccessRole(role.key);
   const [taskTypes, setTaskTypes] = useState(role?.taskTypes ?? null);
   const [permissions, setPermissions] = useState(role?.permissions ?? null);
   const [name, setName] = useState(role?.name ?? "");
@@ -352,9 +355,10 @@ function RoleForm({ role, existingKeys = [], onDone, taskTypeOptions, permission
         />
       </div>
 
-      {isSuperadmin ? (
+      {fullAccess ? (
         <p className="rounded-xl bg-card-inset p-4 text-sm text-fg-muted">
-          Super Admin always has every task type and permission.
+          <span className="font-medium text-fg">{FULL_ACCESS_LABEL}.</span> {role.name} always has every
+          task type and permission, across the whole app.
         </p>
       ) : (
         <>

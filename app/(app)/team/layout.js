@@ -2,27 +2,27 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import TeamTabs from "@/components/team/TeamTabs";
 import PageHeader from "@/components/ui/PageHeader";
-import { getSuperadmin } from "@/lib/team";
+import { getFullAccessUser } from "@/lib/team";
 
 export const metadata = {
   title: "Team Management · 9Expert Studio",
 };
 
-// Superadmin only. The gate (session + DB role re-read) sits inside <Suspense>, as
+// Full access only (superadmin or manager, lib/permissionRules.js). The gate (session + DB role re-read) sits inside <Suspense>, as
 // cacheComponents requires; anyone else gets notFound(). Every page and every
 // server action under /team checks again on its own, so this is not the only guard.
 export default function TeamLayout({ children }) {
   return (
     <div className="mx-auto flex max-w-6xl flex-col gap-6">
       <Suspense fallback={<TeamSkeleton />}>
-        <SuperadminGate>{children}</SuperadminGate>
+        <FullAccessGate>{children}</FullAccessGate>
       </Suspense>
     </div>
   );
 }
 
-async function SuperadminGate({ children }) {
-  if (!(await getSuperadmin())) notFound();
+async function FullAccessGate({ children }) {
+  if (!(await getFullAccessUser())) notFound();
   return (
     <>
       <PageHeader title="Team Management">

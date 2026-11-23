@@ -19,6 +19,7 @@ import {
 } from "@/components/team/styles";
 import Avatar from "@/components/ui/Avatar";
 import AvatarUploader from "@/components/ui/AvatarUploader";
+import { canAssignRole, canManageAccount } from "@/lib/permissionRules";
 import {
   createAccountAction,
   resetPasswordAction,
@@ -34,7 +35,16 @@ const STATUS = {
   locked: { label: "Locked", className: pill.amber },
 };
 
-export default function AccountsManager({ accounts, roles, meId }) {
+const READ_ONLY_TIP = "Only a Super Admin can change this account";
+
+export default function AccountsManager({ accounts, roles, meId, viewerRole }) {
+  // Same pure rules the server actions enforce (lib/permissionRules.js). For a
+  // manager: superadmin rows are read-only and "superadmin" is not offered in the
+  // role pickers. A superadmin viewer sees exactly what they saw before.
+  const viewer = { role: viewerRole };
+  const canManage = (a) => canManageAccount(viewer, { role: a.roleKey });
+  const assignableRoles = roles.filter((r) => canAssignRole(viewer, r.key));
+
   const [query, setQuery] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
@@ -83,8 +93,8 @@ export default function AccountsManager({ accounts, roles, meId }) {
         <button
           type="button"
           onClick={() => setModal({ type: "add" })}
-          disabled={roles.length === 0}
-          title={roles.length === 0 ? "Add a role first (Roles tab)" : undefined}
+          disabled={assignableRoles.length === 0}
+          title={assignableRoles.length === 0 ? "Add a role first (Roles tab)" : undefined}
           className={btnPrimary}
         >
           <Plus className="size-4" aria-hidden="true" />
@@ -194,6 +204,11 @@ export default function AccountsManager({ accounts, roles, meId }) {
                 <td className={`${td} whitespace-nowrap text-fg-muted`}>{a.lastLoginLabel}</td>
                 <td className={`${td} whitespace-nowrap text-fg-muted`}>{a.createdLabel}</td>
                 <td className={`${td} text-right`}>
+                  {!canManage(a) ? (
+                    <span className="text-xs text-fg-muted" title={READ_ONLY_TIP}>
+                      Read only<span className="sr-only">: {READ_ONLY_TIP}</span>
+                    </span>
+                  ) : (
                   <div className="flex justify-end gap-1">
                     {a.locked && (
                       <button
@@ -232,6 +247,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
                       </button>
                     )}
                   </div>
+                  )}
                 </td>
               </tr>
             ))}
@@ -240,7 +256,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
       </div>
 
       <Modal open={modal?.type === "add"} onClose={close} title="Add account">
-        <AddAccountForm roles={roles} onDone={close} />
+        <AddAccountForm roles={assignableRoles} onDone={close} />
       </Modal>
 
       <Modal open={modal?.type === "edit"} onClose={close} title="Edit account">
@@ -249,7 +265,7 @@ export default function AccountsManager({ accounts, roles, meId }) {
             account={modal.account}
             // Fresh from props (refresh() after an avatar change re-sends the list).
             avatarUrl={accounts.find((x) => x.id === modal.account.id)?.avatarUrl ?? null}
-            roles={roles}
+            roles={assignableRoles}
             isSelf={modal.account.id === meId}
             onDone={close}
           />

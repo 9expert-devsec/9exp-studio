@@ -3,15 +3,15 @@
 // Every export of a "use server" module is a public POST endpoint.
 // Export ONLY the task-option actions; helpers stay module-private.
 //
-// Superadmin only: each action re-reads the caller from the DB
-// (authorizeSuperadmin) and validates every field itself.
+// Full access only (superadmin or manager): each action re-reads the caller from the DB
+// (authorizeFullAccess) and validates every field itself.
 
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
 import { syncMsdbRefs } from "@/lib/msdbSync";
 import { setNextFolderNumber } from "@/lib/tasks/folderCounter";
 import { escapeRegex } from "@/lib/projects/rules";
-import { authorizeSuperadmin } from "@/lib/team";
+import { authorizeFullAccess } from "@/lib/team";
 import { PLATFORM_MARK_KEYS, TASK_OPTION_LABEL_MAX, WORK_TYPE_PLATFORMS_MAX, getOptionList } from "@/lib/tasks/options";
 import { EXTERNAL_NAME_MAX, EXTERNAL_NOTE_MAX, cleanExternalName, externalNameKey } from "@/lib/tasks/production";
 import ExternalPerson from "@/models/ExternalPerson";
@@ -69,7 +69,7 @@ async function readFields(formData, list, selfId = null) {
 }
 
 export async function createTaskOptionAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const list = getOptionList(str(formData.get("list")));
@@ -97,7 +97,7 @@ export async function createTaskOptionAction(formData) {
 }
 
 export async function updateTaskOptionAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const option = await findOption(formData);
@@ -122,7 +122,7 @@ export async function updateTaskOptionAction(formData) {
 
 /** Active ⇄ inactive. Inactive options leave pickers but still show on tasks using them. */
 export async function toggleTaskOptionAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const option = await findOption(formData);
@@ -134,7 +134,7 @@ export async function toggleTaskOptionAction(formData) {
 
 /** Move one step up/down within its list (swaps `order` with the neighbour). */
 export async function moveTaskOptionAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const option = await findOption(formData);
@@ -155,7 +155,7 @@ export async function moveTaskOptionAction(formData) {
 
 /** Delete, unless any task references it (then suggest deactivating). */
 export async function deleteTaskOptionAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const option = await findOption(formData);
@@ -190,7 +190,7 @@ export async function deleteTaskOptionAction(formData) {
  * (lib/tasks/folderCounter.js). Rejects a number the system already issued.
  */
 export async function setNextFolderNumberAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const raw = str(formData.get("next")).trim();
@@ -214,7 +214,7 @@ const externalUsage = (id) => Task.countDocuments({ "details.presenters": { $ele
 
 /** Rename + note. The new name's nameKey must stay unique (case/space-insensitive). */
 export async function updateExternalPersonAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const person = await findExternalPerson(formData);
@@ -238,7 +238,7 @@ export async function updateExternalPersonAction(formData) {
 
 /** Active ↔ inactive (inactive: hidden from the picker, still shown on tasks). */
 export async function toggleExternalPersonAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const person = await findExternalPerson(formData);
@@ -250,7 +250,7 @@ export async function toggleExternalPersonAction(formData) {
 
 /** Delete, only while no task uses them (else suggest deactivating). */
 export async function deleteExternalPersonAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const person = await findExternalPerson(formData);
@@ -266,7 +266,7 @@ export async function deleteExternalPersonAction(formData) {
 
 /** "Sync now": refresh the MSDB mirror (Related pickers) from the MSDB API. */
 export async function syncMsdbNowAction() {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const result = await syncMsdbRefs({ reason: "manual" });

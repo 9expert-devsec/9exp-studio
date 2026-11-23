@@ -6,8 +6,12 @@
 //
 // Every action:
 //   1. re-reads the caller's session and 2. re-reads the caller's user doc from the
-//      DB (authorizeSuperadmin): an active superadmin who does not still have to
-//      change their own password. A stale JWT role/flag is never trusted;
+//      DB (authorizeFullAccess): an active superadmin or manager who does not
+//      still have to change their own password. A stale JWT role/flag is never
+//      trusted;
+//   2b. checks canManageAccount against the TARGET read fresh from the DB, and
+//      canAssignRole for the role it would give (lib/permissionRules.js): only a
+//      superadmin may touch a superadmin account or hand out the superadmin role;
 //   3. validates every input;
 //   4. takes the target's role only from the validated `role` field, checked
 //      against the `roles` collection. Nothing else about roles/permissions is read.
@@ -25,7 +29,8 @@ import mongoose from "mongoose";
 import { refresh } from "next/cache";
 import { readAvatarFile, removeAvatar, replaceAvatar } from "@/lib/avatar";
 import { BCRYPT_COST, generateTemporaryPassword, validateNewPassword } from "@/lib/password";
-import { SUPERADMIN, authorizeSuperadmin } from "@/lib/team";
+import { MANAGE_ACCOUNT_DENIED, canAssignRole, canManageAccount } from "@/lib/permissionRules";
+import { SUPERADMIN, authorizeFullAccess } from "@/lib/team";
 import Role from "@/models/Role";
 import User from "@/models/User";
 
@@ -55,6 +60,17 @@ async function findTarget(formData) {
   const id = str(formData.get("id"));
   if (!mongoose.isValidObjectId(id)) return null;
   return User.findById(id).select("role isActive").lean();
+}
+
+// authorizeFullAccess + the target (fresh from the DB) + canManageAccount.
+// Returns { me, target } or { error }.
+async function authorizeOnTarget(formData) {
+  const caller = await authorizeFullAccess();
+  if (caller.error) return caller;
+  const target = await findTarget(formData);
+  if (!target) return { error: "That account no longer exists." };
+  if (!canManageAccount(caller.me, target)) return { error: MANAGE_ACCOUNT_DENIED };
+  return { me: caller.me, target };
 }
 
 // True when `target` is an active superadmin now, will not be after the write,
@@ -92,7 +108,7 @@ function hasAvatar(formData) {
 }
 
 export async function createAccountAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const email = str(formData.get("email")).trim().toLowerCase();
@@ -103,6 +119,7 @@ export async function createAccountAction(formData) {
 
   const role = await readRole(formData);
   if (role.error) return fail(role.error);
+  if (!canAssignRole(caller.me, role.role)) return fail(MANAGE_ACCOUNT_DENIED);
 
   // Validate the photo up front, but upload it only after the account exists.
   let avatar = null;
@@ -151,18 +168,16 @@ export async function createAccountAction(formData) {
 }
 
 export async function updateAccountAction(formData) {
-  const caller = await authorizeSuperadmin();
-  if (caller.error) return fail(caller.error);
-  const { me } = caller;
-
-  const target = await findTarget(formData);
-  if (!target) return fail("That account no longer exists.");
+  const auth = await authorizeOnTarget(formData);
+  if (auth.error) return fail(auth.error);
+  const { me, target } = auth;
 
   const name = readName(formData);
   if (name.error) return fail(name.error);
 
   const role = await readRole(formData);
   if (role.error) return fail(role.error);
+  if (role.role !== target.role && !canAssignRole(me, role.role)) return fail(MANAGE_ACCOUNT_DENIED);
 
   const isActive = str(formData.get("isActive")) === "true";
   const isSelf = target._id.equals(me._id);
@@ -186,12 +201,10 @@ export async function updateAccountAction(formData) {
 // working until it expires (7 days). Their NEXT sign-in needs the new password and
 // then the forced change at /first-login.
 export async function resetPasswordAction(formData) {
-  const caller = await authorizeSuperadmin();
-  if (caller.error) return fail(caller.error);
-
-  const target = await findTarget(formData);
-  if (!target) return fail("That account no longer exists.");
-  if (target._id.equals(caller.me._id)) {
+  const auth = await authorizeOnTarget(formData);
+  if (auth.error) return fail(auth.error);
+  const { me, target } = auth;
+  if (target._id.equals(me._id)) {
     return fail("You cannot reset your own password here. Change it on the Account page.");
   }
 
@@ -220,11 +233,9 @@ export async function resetPasswordAction(formData) {
 }
 
 export async function unlockAccountAction(formData) {
-  const caller = await authorizeSuperadmin();
-  if (caller.error) return fail(caller.error);
-
-  const target = await findTarget(formData);
-  if (!target) return fail("That account no longer exists.");
+  const auth = await authorizeOnTarget(formData);
+  if (auth.error) return fail(auth.error);
+  const { target } = auth;
 
   await User.updateOne(
     { _id: target._id },
@@ -235,14 +246,13 @@ export async function unlockAccountAction(formData) {
   return { ok: true };
 }
 
-// Profile picture for any account (superadmin). Same validation and
-// upload-then-save-then-delete-old flow as the self-service actions (lib/avatar.js).
+// Profile picture for any account (full access; a superadmin's only by a
+// superadmin). Same validation and upload-then-save-then-delete-old flow as the
+// self-service actions (lib/avatar.js).
 export async function updateAccountAvatarAction(formData) {
-  const caller = await authorizeSuperadmin();
-  if (caller.error) return fail(caller.error);
-
-  const target = await findTarget(formData);
-  if (!target) return fail("That account no longer exists.");
+  const auth = await authorizeOnTarget(formData);
+  if (auth.error) return fail(auth.error);
+  const { target } = auth;
 
   const file = await readAvatarFile(formData);
   if (file.error) return fail(file.error);
@@ -253,11 +263,9 @@ export async function updateAccountAvatarAction(formData) {
 }
 
 export async function removeAccountAvatarAction(formData) {
-  const caller = await authorizeSuperadmin();
-  if (caller.error) return fail(caller.error);
-
-  const target = await findTarget(formData);
-  if (!target) return fail("That account no longer exists.");
+  const auth = await authorizeOnTarget(formData);
+  if (auth.error) return fail(auth.error);
+  const { target } = auth;
 
   const result = await removeAvatar(target._id);
   if (result.ok) refresh();

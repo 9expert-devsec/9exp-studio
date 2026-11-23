@@ -3,14 +3,15 @@
 // Every export of a "use server" module is a public POST endpoint.
 // Export ONLY the three role actions; helpers stay module-private.
 //
-// Each action re-reads the caller from the DB (authorizeSuperadmin), validates every
+// Each action re-reads the caller from the DB (authorizeFullAccess), validates every
 // field itself, and never takes `key` (on update) or `isSystem` from the client.
 // Task types / permissions are validated against their key lists.
 
 import mongoose from "mongoose";
 import { refresh } from "next/cache";
 import { PERMISSION_KEYS } from "@/lib/permissions";
-import { SUPERADMIN, authorizeSuperadmin } from "@/lib/team";
+import { FULL_ACCESS_ROLES, isFullAccessRole } from "@/lib/permissionRules";
+import { authorizeFullAccess } from "@/lib/team";
 import { TASK_TYPE_KEYS } from "@/lib/tasks/types";
 import Role, { ROLE_DESCRIPTION_MAX, ROLE_KEY_PATTERN, ROLE_NAME_MAX } from "@/models/Role";
 import User from "@/models/User";
@@ -60,7 +61,7 @@ async function findRole(formData) {
 }
 
 export async function createRoleAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const fields = readNameAndDescription(formData);
@@ -87,7 +88,7 @@ export async function createRoleAction(formData) {
 }
 
 export async function updateRoleAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const role = await findRole(formData);
@@ -96,10 +97,10 @@ export async function updateRoleAction(formData) {
   const fields = readNameAndDescription(formData);
   if (fields.error) return fail(fields.error);
 
-  // Key is immutable. Superadmin always passes every permission check, so its
-  // settings are never written.
+  // Key is immutable. Full-access roles (superadmin, manager) always pass every
+  // permission check, so their settings are never written.
   const update = { $set: { name: fields.name, description: fields.description } };
-  if (role.key !== SUPERADMIN) {
+  if (!isFullAccessRole(role.key)) {
     const settings = readRoleSettings(formData);
     Object.assign(update.$set, settings.set);
     if (Object.keys(settings.unset).length) update.$unset = settings.unset;
@@ -111,12 +112,13 @@ export async function updateRoleAction(formData) {
 }
 
 export async function deleteRoleAction(formData) {
-  const caller = await authorizeSuperadmin();
+  const caller = await authorizeFullAccess();
   if (caller.error) return fail(caller.error);
 
   const role = await findRole(formData);
   if (!role) return fail("That role no longer exists.");
-  if (role.isSystem) return fail("System roles cannot be deleted.");
+  // Full-access roles are fixed in code by key (manager is not seeded isSystem).
+  if (role.isSystem || isFullAccessRole(role.key)) return fail("System roles cannot be deleted.");
 
   const inUse = await User.countDocuments({ role: role.key });
   if (inUse > 0) {
@@ -127,7 +129,7 @@ export async function deleteRoleAction(formData) {
     );
   }
 
-  await Role.deleteOne({ _id: role._id, isSystem: { $ne: true } });
+  await Role.deleteOne({ _id: role._id, isSystem: { $ne: true }, key: { $nin: FULL_ACCESS_ROLES } });
 
   refresh();
   return { ok: true };
