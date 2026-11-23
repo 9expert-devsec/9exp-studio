@@ -42,3 +42,12 @@ export function ContentFormSkeleton() {
     </div>
   );
 }
+
+export function TimelineSkeleton() {
+  return (
+    <div className="flex animate-pulse flex-col gap-4" aria-hidden="true">
+      <span className="h-11 w-full max-w-xl rounded bg-track" />
+      <span className="h-[420px] rounded-[16px] bg-track" />
+    </div>
+  );
+}

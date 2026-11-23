@@ -5,7 +5,7 @@ import { ProjectTabs } from "@/components/projects/ProjectSectionNav";
 import { ProjectHeaderSkeleton } from "@/components/projects/Skeletons";
 import { loadProjectDetail } from "@/lib/projects/queries";
 
-// Shared by /projects/[id] (Content, default), /overview, /content/new,
+// Shared by /projects/[id] (Content, default), /overview, /timeline, /content/new,
 // /content/[contentId] and /content/[contentId]/edit: breadcrumb + header card +
 // tabs render ONCE here. /projects/[id]/edit stays outside this route group.
 // The breadcrumb is the @crumbs parallel-route slot (it re-renders per navigation,

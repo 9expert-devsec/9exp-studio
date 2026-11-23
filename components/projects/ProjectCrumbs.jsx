@@ -4,6 +4,7 @@
 // can name the current content item. `rest` = segments below the layout:
 //   []                         → Projects / {project} / Content
 //   ["overview"]               → Projects / {project} / Overview
+//   ["timeline"]               → Projects / {project} / Timeline
 //   ["content", "new"]         → … / Content / Create Content
 //   ["content", <id>]          → … / Content / {content name}
 //   ["content", <id>, "edit"]  → … / Content / Edit Content
@@ -35,6 +36,8 @@ async function Crumbs({ params }) {
 
   if (rest[0] === "overview") {
     trail.push({ label: "Overview" });
+  } else if (rest[0] === "timeline") {
+    trail.push({ label: "Timeline" });
   } else if (rest[0] === "content" && rest[1] === "new") {
     trail.push({ label: "Content", href }, { label: "Create Content" });
   } else if (rest[0] === "content" && rest[1] && rest[2] === "edit") {
