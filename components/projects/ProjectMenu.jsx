@@ -20,11 +20,10 @@ import {
   Trash2,
 } from "lucide-react";
 import { deleteContentAction, duplicateContentAction } from "@/app/(app)/projects/content-actions";
-import { changeTaskStatusAction, deleteTaskAction, duplicateTaskAction } from "@/app/(app)/projects/task-actions";
+import { deleteTaskAction, duplicateTaskAction } from "@/app/(app)/projects/task-actions";
 import { toast } from "@/components/ui/Toast";
 import { invalidateTaskPanel } from "@/components/tasks/panelCache";
-import { taskStatuses } from "@/lib/tasks/types";
-import { StatusDot } from "./ProjectBits";
+import StatusMoveForm from "@/components/tasks/StatusMoveForm";
 import { buttonClass } from "@/components/ui/Button";
 import IconButton from "@/components/ui/IconButton";
 import Modal from "@/components/ui/Modal";
@@ -572,7 +571,7 @@ export function TaskMenu({ task, onDeleted }) {
         <>
           {task.canChangeStatus && (
             <Modal open={dialog === "status"} onClose={close} title="Change status" description={`${idLabel} · ${task.title}`}>
-              <ChangeTaskStatusForm task={task} onDone={close} />
+              <StatusMoveForm task={task} onDone={close} />
             </Modal>
           )}
           {task.canDelete && (
@@ -637,79 +636,6 @@ export function TaskMenu({ task, onDeleted }) {
         </>
       )}
     </ActionMenu>
-  );
-}
-
-const optionRow =
-  "flex min-h-11 cursor-pointer items-center gap-3 rounded-[12px] border border-line px-3.5 text-sm text-fg transition-colors hover:bg-card-inset has-[:checked]:border-brand-500 has-[:checked]:bg-accent-soft has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-brand-500";
-
-/** One radio list (Thai labels from the catalog), the current value checked. */
-function StatusRadios({ legend, name, options, value, onChange }) {
-  return (
-    <fieldset className="flex flex-col gap-2">
-      <legend className="mb-2 text-sm font-semibold text-fg">{legend}</legend>
-      {options.map((o) => (
-        <label key={o.key} className={optionRow}>
-          <input
-            type="radio"
-            name={name}
-            value={o.key}
-            checked={value === o.key}
-            onChange={() => onChange(o.key)}
-            data-autofocus={value === o.key ? true : undefined}
-            className="size-4 accent-brand-500"
-          />
-          <span className="flex-1">{o.label}</span>
-          {o.group && <StatusDot status={o.group} />}
-        </label>
-      ))}
-    </fieldset>
-  );
-}
-
-function ChangeTaskStatusForm({ task, onDone }) {
-  // A post's Status Asset is derived from its Related Assets — not set here.
-  const statuses = taskStatuses(task.type);
-  const [status, setStatus] = useState(task.status);
-  const [error, setError] = useState("");
-  const [pending, startTransition] = useTransition();
-
-  const onSubmit = (e) => {
-    e.preventDefault();
-    setError("");
-    const fd = new FormData();
-    fd.set("projectId", task.projectId);
-    fd.set("contentId", task.contentId);
-    fd.set("taskId", task.id);
-    fd.set("status", status);
-    startTransition(async () => {
-      const res = await changeTaskStatusAction(fd);
-      if (res?.ok) {
-        invalidateTaskPanel(); // Task Detail cache (an open panel refetches)
-        onDone();
-      } else setError(res?.error ?? "Something went wrong.");
-    });
-  };
-
-  return (
-    <form onSubmit={onSubmit} className="flex flex-col gap-5">
-      <StatusRadios legend="Status" name="status" options={statuses} value={status} onChange={setStatus} />
-      {task.assetStatusLabel && (
-        <p className="text-xs text-fg-muted">
-          Asset: <span className="font-medium text-fg">{task.assetStatusLabel}</span> — set automatically from the post&apos;s Related Assets.
-        </p>
-      )}
-      <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <button type="button" onClick={onDone} className={buttonClass("secondary")}>
-          Cancel
-        </button>
-        <button type="submit" disabled={pending} className={buttonClass("primary")}>
-          {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
-          Save
-        </button>
-      </div>
-    </form>
   );
 }
 

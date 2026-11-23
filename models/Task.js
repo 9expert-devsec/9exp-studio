@@ -21,6 +21,10 @@ const TaskSchema = new mongoose.Schema(
     title: { type: String, required: true, trim: true, maxlength: TASK_TITLE_MAX },
     type: { type: String, enum: TASK_TYPE_KEYS, required: true },
     status: { type: String, required: true },
+    // Round 40: the working status the task left when it was paused (hold) or
+    // cancelled — Resume / Reopen return to it (lib/tasks/transitions.js
+    // nextHoldMemory). null otherwise; missing on old tasks → the initial status.
+    statusBeforeHold: { type: String, default: null },
     // Post "Status Asset" (informational, never in progress maths); null otherwise.
     assetStatus: { type: String, default: null },
     // A single person, optional.

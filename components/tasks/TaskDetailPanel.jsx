@@ -53,7 +53,9 @@ import {
   Video,
   X,
 } from "lucide-react";
-import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
+import { loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
+import StatusMoveForm from "@/components/tasks/StatusMoveForm";
+import Modal from "@/components/ui/Modal";
 import {
   getCachedPanel,
   invalidateTaskPanel,
@@ -645,53 +647,30 @@ function Stepper({ stepper }) {
   );
 }
 
+/**
+ * Current status + "Change status" (round 40): the SAME form as the task ⋯ menu
+ * (components/tasks/StatusMoveForm.jsx), offering only the allowed moves.
+ */
 function StatusTile({ panel }) {
-  const [pending, startTransition] = useTransition();
-  const change = (status) => {
-    if (status === panel.status) return;
-    const fd = new FormData();
-    fd.set("projectId", panel.projectId);
-    fd.set("contentId", panel.contentId);
-    fd.set("taskId", panel.id);
-    fd.set("status", status);
-    startTransition(async () => {
-      const res = await changeTaskStatusAction(fd);
-      if (res?.ok) {
-        // Every cached panel (a Post's derived asset status may change too); this
-        // one refetches in place. The page refreshes itself (the action's refresh()).
-        invalidateTaskPanel();
-        toast("Status updated");
-      } else toast(res?.error ?? "Couldn't change the status.", { tone: "error" });
-    });
-  };
+  const [open, setOpen] = useState(false);
+  const task = panel.menuTask;
+  const canChange = panel.canChangeStatus && !!task && (task.statusMoves?.length ?? 0) > 0;
   return (
     <div className="rounded-[14px] bg-card-inset p-3.5">
-      <p id="task-current-status" className="text-xs text-fg-muted">Current Status</p>
-      {panel.canChangeStatus ? (
-        <div className="relative mt-1.5">
-          <select
-            aria-labelledby="task-current-status"
-            value={panel.status}
-            disabled={pending}
-            onChange={(e) => change(e.target.value)}
-            className="min-h-10 w-full appearance-none rounded-[10px] border border-line bg-card py-2 pl-3 pr-9 text-sm font-semibold text-fg outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 disabled:opacity-60"
-          >
-            {panel.statusOptions.map((s) => (
-              <option key={s.key} value={s.key}>
-                {s.label}
-              </option>
-            ))}
-          </select>
-          {pending ? (
-            <Loader2 className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-fg-muted" aria-hidden="true" />
-          ) : (
-            <ArrowRightLeft className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-          )}
-        </div>
-      ) : (
-        <p className="mt-1.5">
-          <StatusChip status={panel.group} label={panel.statusLabel} />
-        </p>
+      <p className="text-xs text-fg-muted">Current Status</p>
+      <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+        <StatusChip status={panel.group} label={panel.statusLabel} />
+        {canChange && (
+          <button type="button" onClick={() => setOpen(true)} className={buttonClass("secondary")}>
+            <ArrowRightLeft className="size-4" aria-hidden="true" />
+            Change status
+          </button>
+        )}
+      </div>
+      {canChange && (
+        <Modal open={open} onClose={() => setOpen(false)} title="Change status" description={`${panel.idChip} · ${panel.title}`}>
+          <StatusMoveForm task={task} onDone={() => setOpen(false)} onSaved={() => toast("Status updated")} />
+        </Modal>
       )}
     </div>
   );

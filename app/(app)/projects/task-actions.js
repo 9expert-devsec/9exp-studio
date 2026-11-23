@@ -29,6 +29,8 @@ import { recomputeRollups } from "@/lib/projects/progress";
 import { loadTaskPanel } from "@/lib/projects/queries";
 import { TASK_SEQ, createNumbered, ensureSeq, logDuplicateKey } from "@/lib/projects/sequence";
 import { DuplicateKeyError, duplicateKeyKind, duplicateKeyMessage } from "@/lib/projects/dupKey";
+import { canOverrideTaskStatus } from "@/lib/permissions";
+import { canTransition, nextHoldMemory, taskHasRelatedAssets } from "@/lib/tasks/transitions";
 import { parseTaskForm, parseTaskTitle } from "@/lib/projects/validate";
 import { appendedSortOrder, insertAfter, orderWrites, sortByOrder, validateReorder } from "@/lib/projects/order";
 import { buildTaskCopy } from "@/lib/tasks/duplicate";
@@ -303,10 +305,35 @@ export async function changeTaskStatusAction(formData) {
 
   const status = str(formData.get("status"));
   if (!isValidStatus(task.type, status)) return fail("Choose a status for this task type.");
-
   if (status === task.status) return { ok: true };
-  await Task.updateOne({ _id: task._id, content: content._id, project: project._id }, { $set: { status, updatedBy: viewer.id } });
-  await logActivity({ task: task._id, project: project._id, actor: viewer.id, type: "status_changed", data: { from: task.status, to: status } });
+
+  // Round 40: only the arrows + escape hatches (or an override) — lib/tasks/transitions.js.
+  const move = canTransition(task.type, task.status, status, {
+    canOverride: canOverrideTaskStatus(viewer, project),
+    hasRelatedAssets: taskHasRelatedAssets(task),
+    statusBeforeHold: task.statusBeforeHold ?? null,
+  });
+  if (!move.ok) return fail(move.reason);
+
+  // The status filter makes it atomic: a concurrent change in between → reload.
+  const res = await Task.updateOne(
+    { _id: task._id, content: content._id, project: project._id, status: task.status },
+    {
+      $set: {
+        status,
+        statusBeforeHold: nextHoldMemory(task.type, task.status, status, task.statusBeforeHold ?? null),
+        updatedBy: viewer.id,
+      },
+    }
+  );
+  if (!res.matchedCount) return fail("This task's status just changed. Reload and try again.");
+  await logActivity({
+    task: task._id,
+    project: project._id,
+    actor: viewer.id,
+    type: "status_changed",
+    data: { from: task.status, to: status, ...(move.kind === "override" ? { override: true } : {}) },
+  });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
