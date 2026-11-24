@@ -3,6 +3,10 @@
 // Project Timeline tab (round 42; Figma 233:110 toolbar · 233:111 chart · 233:112
 // unscheduled). Read-only: a task row / bar / post card opens the Task Detail
 // panel (?task=<id>, TaskOpenLink); nothing is dragged or edited here.
+// Round 43: the chart is a bounded card (max-height from its measured top offset);
+// rows scroll vertically inside it under a fixed header; only the day grid scrolls
+// horizontally (bodyRef.scrollLeft is the one source of truth — header and the
+// bottom scrollbar strip follow it).
 // State: scale + collapsed groups (remembered per viewer/device/project — prefs.js),
 // filters (this visit only), the visible range label (from the scroll position).
 // All dates / spans / rules come from lib/timeline/layout.js.
@@ -30,7 +34,7 @@ import {
 } from "@/lib/timeline/layout";
 import { enabledTaskTypes } from "@/lib/tasks/types";
 import { useTimelinePrefs } from "./prefs";
-import { AssigneeBadge, TaskGlyph, TimelineBody, TimelineHeader } from "./TimelineChart";
+import { AssigneeBadge, LEFT_VARS, TaskGlyph, TimelineBody, TimelineHeader, TimelineScrollbar } from "./TimelineChart";
 
 const chipBtn = buttonClass("secondary", "min-h-9 rounded-full px-3.5");
 
@@ -47,6 +51,10 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
   const bodyRef = useRef(null);
   const headerRef = useRef(null);
   const anchorRef = useRef(null); // day (fractional) at the left third of the viewport
+  const cardRef = useRef(null);
+  const trackRef = useRef(null);
+  const thumbRef = useRef(null);
+  const bodyId = useId();
 
   const scale = prefs.scale;
   const dayWidth = SCALES[scale].dayWidth;
@@ -59,24 +67,98 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
   const collapsed = new Set(prefs.collapsed);
   const allCollapsed = rows.length > 0 && rows.every((r) => collapsed.has(r.id));
 
-  // Geometry of the visible chart area (the sticky left column covers the first --tl-left px).
+  // Geometry of the day-grid viewport (bodyRef = THE horizontal scroller).
   const metrics = () => {
     const el = bodyRef.current;
     if (!el) return null;
-    const left = el.querySelector("[data-left]")?.offsetWidth ?? 0;
-    const chart = Math.max(0, el.clientWidth - left);
-    return { el, chart, third: chart / 3 };
+    const chart = el.clientWidth;
+    return { el, chart, third: chart / 3, max: Math.max(0, el.scrollWidth - chart) };
   };
 
+  // Bottom strip thumb: width = visible share of the grid, offset = scroll share.
+  const thumbGeometry = (m) => {
+    const tw = trackRef.current?.clientWidth ?? 0;
+    const sw = m.el.scrollWidth || 1;
+    const width = m.max > 0 ? Math.min(tw, Math.max(28, (tw * m.chart) / sw)) : tw;
+    const left = m.max > 0 ? ((tw - width) * m.el.scrollLeft) / m.max : 0;
+    return { tw, width, left };
+  };
+
+  const paintThumb = (m) => {
+    const thumb = thumbRef.current;
+    if (!thumb) return;
+    const g = thumbGeometry(m);
+    thumb.style.width = `${g.width}px`;
+    thumb.style.transform = `translateX(${g.left}px)`;
+    thumb.style.visibility = m.max > 0 ? "visible" : "hidden";
+    trackRef.current?.setAttribute("aria-valuenow", String(m.max > 0 ? Math.round((m.el.scrollLeft / m.max) * 100) : 0));
+  };
+
+  // Header + strip follow the body's scrollLeft (one source of truth).
   const syncFromScroll = () => {
     const m = metrics();
     if (!m) return;
     if (headerRef.current) headerRef.current.scrollLeft = m.el.scrollLeft;
+    paintThumb(m);
     anchorRef.current = win.start + (m.el.scrollLeft + m.third) / dayWidth;
     setRange(visibleDays(win, m.el.scrollLeft, m.chart, dayWidth));
   };
 
+  // Strip: drag the thumb (pointer capture), click the track (jump), ‹ › (one week).
+  const onThumbDown = (e) => {
+    const m = metrics();
+    if (!m || e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const thumb = e.currentTarget;
+    const g = thumbGeometry(m);
+    const ratio = g.tw > g.width ? m.max / (g.tw - g.width) : 0;
+    const startX = e.clientX;
+    const startLeft = m.el.scrollLeft;
+    thumb.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      m.el.scrollLeft = startLeft + (ev.clientX - startX) * ratio;
+    };
+    const up = () => {
+      thumb.removeEventListener("pointermove", move);
+      thumb.removeEventListener("pointerup", up);
+      thumb.removeEventListener("pointercancel", up);
+    };
+    thumb.addEventListener("pointermove", move);
+    thumb.addEventListener("pointerup", up);
+    thumb.addEventListener("pointercancel", up);
+  };
+  const onTrackDown = (e) => {
+    const m = metrics();
+    if (!m || e.button !== 0 || m.max <= 0) return;
+    const g = thumbGeometry(m);
+    const x = e.clientX - e.currentTarget.getBoundingClientRect().left;
+    const share = g.tw > g.width ? (x - g.width / 2) / (g.tw - g.width) : 0;
+    m.el.scrollTo({ left: Math.min(m.max, Math.max(0, share * m.max)), behavior: "smooth" });
+  };
+
   const hasRows = rows.length > 0;
+  const hasContent = contents.length > 0;
+
+  // Card height: bounded to the viewport below the card's own top (document offset,
+  // measured — no fixed numbers), written as --tl-top on the card. Re-measured when
+  // anything above it changes size (body resize) or the window resizes.
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!card) return;
+    const measure = () => {
+      const top = Math.max(0, Math.round(card.getBoundingClientRect().top + window.scrollY));
+      card.style.setProperty("--tl-top", `${top}px`);
+    };
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(document.body);
+    window.addEventListener("resize", measure);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", measure);
+    };
+  }, [hasContent]);
 
   // On open: today at the left third. On a scale change: keep the anchor day there.
   const reanchor = useEffectEvent(() => {
@@ -85,10 +167,11 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
     const anchor = anchorRef.current ?? win.today + 0.5;
     m.el.scrollLeft = Math.max(0, (anchor - win.start) * dayWidth - m.third);
     if (headerRef.current) headerRef.current.scrollLeft = m.el.scrollLeft;
+    paintThumb(metrics());
   });
   useLayoutEffect(() => reanchor(), [dayWidth, win.start, hasRows]);
 
-  // Range label + header offset also on resize / chart width change (no scroll event then).
+  // Range label, header offset and thumb also on resize / grid width change (no scroll event then).
   const onResize = useEffectEvent(() => syncFromScroll());
   useEffect(() => {
     const el = bodyRef.current;
@@ -96,6 +179,7 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
     const ro = new ResizeObserver(() => onResize());
     ro.observe(el);
     if (el.firstElementChild) ro.observe(el.firstElementChild);
+    if (trackRef.current) ro.observe(trackRef.current);
     return () => ro.disconnect();
   }, [hasRows]);
 
@@ -172,13 +256,16 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
         </div>
       </div>
 
-      {/* Chart */}
-      <div className="rounded-[16px] border border-line bg-card">
-        <div className="sticky top-14 z-30 rounded-t-[16px] border-b border-line bg-card">
-          <TimelineHeader win={win} dayWidth={dayWidth} months={months} scale={scale} headerRef={headerRef} />
-        </div>
-        {rows.length > 0 ? (
+      {/* Chart: a bounded card — fixed header, rows scrolling inside, strip pinned at the bottom. */}
+      <div
+        ref={cardRef}
+        className={`flex flex-col overflow-hidden rounded-[16px] border border-line bg-card ${LEFT_VARS}`}
+        style={{ maxHeight: "max(420px, calc(100dvh - var(--tl-top, 0px) - 16px))" }}
+      >
+        <TimelineHeader win={win} dayWidth={dayWidth} months={months} scale={scale} headerRef={headerRef} />
+        {hasRows ? (
           <TimelineBody
+            bodyId={bodyId}
             rows={rows}
             collapsed={collapsed}
             onToggle={toggleGroup}
@@ -197,6 +284,16 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
               Clear filters
             </button>
           </div>
+        )}
+        {hasRows && (
+          <TimelineScrollbar
+            trackRef={trackRef}
+            thumbRef={thumbRef}
+            bodyId={bodyId}
+            onThumbDown={onThumbDown}
+            onTrackDown={onTrackDown}
+            onStep={(dir) => scrollByDays(dir * 7)}
+          />
         )}
       </div>
 

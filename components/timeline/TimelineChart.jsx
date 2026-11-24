@@ -1,15 +1,18 @@
 "use client";
 
 // The Gantt grid (rendering only; the maths lives in lib/timeline/layout.js).
-// Layout: one horizontal scroller (the body) whose rows are [sticky left column |
-// day grid]. The header is a SEPARATE strip, sticky under the app header while the
-// page scrolls; its own (hidden) horizontal scroll is kept equal to the body's by
-// the parent. Left column width = --tl-left (narrow on mobile: icon + title only,
-// no assignee column). A background layer under the rows draws the weekend
-// shading, month dividers and today's dashed line.
+// Round 43: everything sits in ONE bounded card (ProjectTimeline), top to bottom:
+//   header  [left header cell | day-grid header viewport (overflow hidden)]
+//   body    the vertical scroller: [left column | day-grid viewport — overflow-x
+//           auto with the native bar hidden = THE scrollLeft source]
+//   strip   [empty under the left column | ‹ track + thumb ›] (TimelineScrollbar)
+// Left and right columns render the same flattened row list with the same fixed
+// heights (bottom border included), so they line up. Left width = --tl-left (narrow
+// on mobile: icon + title, no assignee column). Header, body and strip all reserve
+// the vertical-scrollbar gutter, so their right parts are exactly as wide.
 
 import Link from "next/link";
-import { ChevronDown, CircleCheck, Folder, ListChecks } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, CircleCheck, Folder, ListChecks } from "lucide-react";
 import Avatar from "@/components/ui/Avatar";
 import PlatformIcon from "@/components/tasks/PlatformIcon";
 import TaskOpenLink from "@/components/tasks/TaskOpenLink";
@@ -32,8 +35,8 @@ import { getTaskType, taskTypeTone } from "@/lib/tasks/types";
 export const LEFT_VARS = "[--tl-left:176px] sm:[--tl-left:380px]";
 const GROUP_H = 52;
 const TASK_H = 40;
-const leftCell =
-  "sticky left-0 z-20 flex w-[var(--tl-left)] shrink-0 items-center border-r border-line bg-card";
+// One row = fixed height incl. its bottom border, identical in both columns.
+const rowBase = "flex items-center border-b border-line-subtle";
 const assigneeCol = "hidden w-20 shrink-0 items-center justify-center sm:flex";
 
 /** Type icon, or the green check for a completed task. */
@@ -70,13 +73,14 @@ export function TimelineHeader({ win, dayWidth, months, scale, headerRef }) {
   const width = win.days * dayWidth;
   const days = Array.from({ length: win.days }, (_, k) => win.start + k);
   return (
-    <div ref={headerRef} className="overflow-hidden rounded-t-[16px]">
-      <div className={`flex ${LEFT_VARS}`} style={{ width: `calc(var(--tl-left) + ${width}px)` }}>
-        <div className={`${leftCell} items-end self-stretch pb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted`}>
-          <span className="min-w-0 flex-1 truncate px-3 sm:px-4">Content / Task</span>
-          <span className={`${assigneeCol} normal-case tracking-normal`}>Assignee</span>
-        </div>
-        <div className="shrink-0" style={{ width }}>
+    <div className="flex shrink-0 border-b border-line bg-card">
+      <div className="flex w-[var(--tl-left)] shrink-0 items-end border-r border-line bg-card pb-2 text-[11px] font-semibold uppercase tracking-wide text-fg-muted">
+        <span className="min-w-0 flex-1 truncate px-3 sm:px-4">Content / Task</span>
+        <span className={`${assigneeCol} normal-case tracking-normal`}>Assignee</span>
+      </div>
+      {/* Hidden horizontal scroll, kept equal to the body's by ProjectTimeline. */}
+      <div ref={headerRef} className="min-w-0 flex-1 overflow-hidden bg-card [scrollbar-gutter:stable]">
+        <div className="bg-card" style={{ width }}>
           <div className="relative h-8 border-b border-line-subtle">
             {months.map((m, i) => (
               <div
@@ -149,7 +153,7 @@ function GridBackground({ win, dayWidth, months, scale }) {
   return (
     <div
       aria-hidden="true"
-      className="pointer-events-none absolute inset-y-0 left-[var(--tl-left)] z-0"
+      className="pointer-events-none absolute inset-y-0 left-0 z-0"
       style={{ width: win.days * dayWidth, backgroundImage: layers.join(","), backgroundSize: sizes.join(",") }}
     >
       {months.slice(1).map((m) => (
@@ -259,119 +263,188 @@ function PostMilestone({ task, span, win, dayWidth, nowMs }) {
   );
 }
 
-function GroupRow({ row, collapsed, onToggle, win, dayWidth, width }) {
+function GroupLeft({ row, collapsed, onToggle }) {
   const { done, total } = doneCount(row.all);
+  return (
+    <div className={`${rowBase} bg-card-inset`} style={{ height: GROUP_H }}>
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1.5 pr-2 sm:pl-2.5">
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={!collapsed}
+          aria-label={`${collapsed ? "Expand" : "Collapse"} ${row.name}`}
+          className="flex size-8 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-track hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+        >
+          <ChevronDown className={`size-4 transition-transform ${collapsed ? "-rotate-90" : ""}`} aria-hidden="true" />
+        </button>
+        <Folder className="hidden size-4 shrink-0 text-fg-muted sm:block" aria-hidden="true" />
+        <div className="min-w-0">
+          <Link
+            href={row.href}
+            className="block truncate text-sm font-semibold text-fg hover:text-accent-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+            title={row.name}
+          >
+            {row.name}
+          </Link>
+          <p className="text-[11px] text-fg-muted">
+            {done}/{total} done
+          </p>
+        </div>
+      </div>
+      <span className={`${assigneeCol} text-fg-muted`} aria-hidden="true">
+        –
+      </span>
+    </div>
+  );
+}
+
+function GroupRight({ row, win, dayWidth }) {
   const span = groupSpan(row.all);
   return (
-    <div className="flex bg-track/25" style={{ height: GROUP_H }}>
-      <div data-left className={`${leftCell} bg-card-inset`}>
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1.5 pr-2 sm:pl-2.5">
-          <button
-            type="button"
-            onClick={onToggle}
-            aria-expanded={!collapsed}
-            aria-label={`${collapsed ? "Expand" : "Collapse"} ${row.name}`}
-            className="flex size-8 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-track hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
-          >
-            <ChevronDown className={`size-4 transition-transform ${collapsed ? "-rotate-90" : ""}`} aria-hidden="true" />
-          </button>
-          <Folder className="hidden size-4 shrink-0 text-fg-muted sm:block" aria-hidden="true" />
-          <div className="min-w-0">
-            <Link
-              href={row.href}
-              className="block truncate text-sm font-semibold text-fg hover:text-accent-fg focus-visible:outline-2 focus-visible:outline-brand-500"
-              title={row.name}
-            >
-              {row.name}
-            </Link>
-            <p className="text-[11px] text-fg-muted">
-              {done}/{total} done
-            </p>
-          </div>
-        </div>
-        <span className={`${assigneeCol} text-fg-muted`} aria-hidden="true">
-          –
+    <div className={`${rowBase} relative bg-track/25`} style={{ height: GROUP_H }}>
+      {span && (
+        <span
+          className="absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden whitespace-nowrap rounded-md bg-fg-muted/35 px-2 text-[11px] font-medium text-fg"
+          style={pos(span, win, dayWidth)}
+          title={`${row.name}: ${rangeLabel(span.start, span.end)}`}
+        >
+          <span className="truncate">{rangeLabel(span.start, span.end, false)}</span>
         </span>
-      </div>
-      <div className="relative shrink-0" style={{ width }}>
-        {span && (
-          <span
-            className="absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden whitespace-nowrap rounded-md bg-fg-muted/35 px-2 text-[11px] font-medium text-fg"
-            style={pos(span, win, dayWidth)}
-            title={`${row.name}: ${rangeLabel(span.start, span.end)}`}
-          >
-            <span className="truncate">{rangeLabel(span.start, span.end, false)}</span>
-          </span>
-        )}
-      </div>
+      )}
     </div>
   );
 }
 
-function TaskRow({ task, win, dayWidth, width, nowMs }) {
-  const span = taskSpan(task);
+function TaskLeft({ task }) {
   const cancelled = task.group === "cancelled";
   return (
-    <div className="flex" style={{ height: TASK_H }}>
-      <div data-left className={leftCell}>
-        <div className="flex min-w-0 flex-1 items-center gap-2 pl-3 pr-2 sm:pl-10">
-          <TaskGlyph task={task} />
-          <TaskOpenLink
-            taskId={task.id}
-            href={task.openHref}
-            title={`${task.typeLabel} · ${task.title}`}
-            className={`min-w-0 truncate rounded text-sm hover:text-accent-fg focus-visible:outline-2 focus-visible:outline-brand-500 ${
-              cancelled ? "text-fg-muted line-through" : "text-fg"
-            }`}
-          >
-            <span className="hidden font-semibold sm:inline">{task.typeLabel}</span>
-            <span className="hidden sm:inline"> · </span>
-            {task.title}
-          </TaskOpenLink>
-        </div>
-        <span className={assigneeCol}>
-          {task.assignee ? <AssigneeBadge task={task} /> : <span className="text-fg-muted">–</span>}
-        </span>
+    <div className={rowBase} style={{ height: TASK_H }}>
+      <div className="flex min-w-0 flex-1 items-center gap-2 pl-3 pr-2 sm:pl-10">
+        <TaskGlyph task={task} />
+        <TaskOpenLink
+          taskId={task.id}
+          href={task.openHref}
+          title={`${task.typeLabel} · ${task.title}`}
+          className={`min-w-0 truncate rounded text-sm hover:text-accent-fg focus-visible:outline-2 focus-visible:outline-brand-500 ${
+            cancelled ? "text-fg-muted line-through" : "text-fg"
+          }`}
+        >
+          <span className="hidden font-semibold sm:inline">{task.typeLabel}</span>
+          <span className="hidden sm:inline"> · </span>
+          {task.title}
+        </TaskOpenLink>
       </div>
-      <div className="relative shrink-0" style={{ width }}>
-        {span &&
-          (span.kind === "milestone" ? (
-            <PostMilestone task={task} span={span} win={win} dayWidth={dayWidth} nowMs={nowMs} />
+      <span className={assigneeCol}>
+        {task.assignee ? <AssigneeBadge task={task} /> : <span className="text-fg-muted">–</span>}
+      </span>
+    </div>
+  );
+}
+
+function TaskRight({ task, win, dayWidth, nowMs }) {
+  const span = taskSpan(task);
+  return (
+    <div className={`${rowBase} relative`} style={{ height: TASK_H }}>
+      {span &&
+        (span.kind === "milestone" ? (
+          <PostMilestone task={task} span={span} win={win} dayWidth={dayWidth} nowMs={nowMs} />
+        ) : (
+          <TaskBar task={task} span={span} win={win} dayWidth={dayWidth} nowMs={nowMs} />
+        ))}
+    </div>
+  );
+}
+
+/** Group + (unless collapsed) task rows, flattened in display order. */
+const flatRows = (rows, collapsed) =>
+  rows.flatMap((row) => [
+    { key: `g-${row.id}`, row },
+    ...(collapsed.has(row.id) ? [] : row.tasks.map((task) => ({ key: `t-${task.id}`, task }))),
+  ]);
+
+/**
+ * The body: ONE vertical scroller holding [left column | day-grid viewport]. The
+ * day-grid viewport (bodyRef) is the only horizontal scroller and THE scrollLeft
+ * source; its native bar is hidden (the card's bottom strip replaces it), while
+ * trackpad / shift+wheel still scroll it. The left column never moves sideways.
+ */
+export function TimelineBody({ rows, collapsed, onToggle, win, dayWidth, months, scale, nowMs, bodyRef, onScroll, bodyId }) {
+  const width = win.days * dayWidth;
+  const items = flatRows(rows, collapsed);
+  return (
+    <div className="flex min-h-0 flex-1 items-start overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]">
+      <div className="w-[var(--tl-left)] shrink-0 border-r border-line bg-card">
+        {items.map((it) =>
+          it.row ? (
+            <GroupLeft key={it.key} row={it.row} collapsed={collapsed.has(it.row.id)} onToggle={() => onToggle(it.row.id)} />
           ) : (
-            <TaskBar task={task} span={span} win={win} dayWidth={dayWidth} nowMs={nowMs} />
-          ))}
+            <TaskLeft key={it.key} task={it.task} />
+          )
+        )}
+      </div>
+      <div
+        id={bodyId}
+        ref={bodyRef}
+        onScroll={onScroll}
+        className="min-w-0 flex-1 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      >
+        <div className="relative" style={{ width }}>
+          <GridBackground win={win} dayWidth={dayWidth} months={months} scale={scale} />
+          <div className="relative">
+            {items.map((it) =>
+              it.row ? (
+                <GroupRight key={it.key} row={it.row} win={win} dayWidth={dayWidth} />
+              ) : (
+                <TaskRight key={it.key} task={it.task} win={win} dayWidth={dayWidth} nowMs={nowMs} />
+              )
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-export function TimelineBody({ rows, collapsed, onToggle, win, dayWidth, months, scale, nowMs, bodyRef, onScroll }) {
-  const width = win.days * dayWidth;
+// ---------------------------------------------------------------------------
+// Bottom scrollbar strip
+
+/**
+ * The card's horizontal scrollbar (Figma 233:463 track / 233:464 thumb), pinned to
+ * the bottom of the card under the day grid only, with ‹ › at its ends. It holds
+ * no scroll state: the parent positions the thumb (thumbRef) from the body's
+ * scrollLeft; these handlers only ask the parent to scroll the body.
+ */
+export function TimelineScrollbar({ trackRef, thumbRef, bodyId, onThumbDown, onTrackDown, onStep }) {
+  const arrow =
+    "flex size-7 shrink-0 items-center justify-center rounded-md text-fg-muted hover:bg-track hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500";
   return (
-    <div ref={bodyRef} onScroll={onScroll} className="overflow-x-auto rounded-b-[16px]">
-      <div className={`relative ${LEFT_VARS}`} style={{ width: `calc(var(--tl-left) + ${width}px)` }}>
-        <GridBackground win={win} dayWidth={dayWidth} months={months} scale={scale} />
-        <div className="relative divide-y divide-line-subtle">
-          {rows.map((row) => {
-            const isCollapsed = collapsed.has(row.id);
-            return (
-              <div key={row.id} role="group" aria-label={row.name} className="divide-y divide-line-subtle">
-                <GroupRow
-                  row={row}
-                  collapsed={isCollapsed}
-                  onToggle={() => onToggle(row.id)}
-                  win={win}
-                  dayWidth={dayWidth}
-                  width={width}
-                />
-                {!isCollapsed &&
-                  row.tasks.map((t) => (
-                    <TaskRow key={t.id} task={t} win={win} dayWidth={dayWidth} width={width} nowMs={nowMs} />
-                  ))}
-              </div>
-            );
-          })}
+    <div className="flex shrink-0 border-t border-line bg-card">
+      <div className="w-[var(--tl-left)] shrink-0 border-r border-line" aria-hidden="true" />
+      <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden px-1 py-1 [scrollbar-gutter:stable]">
+        <button type="button" className={arrow} aria-label="Scroll timeline left" onClick={() => onStep(-1)}>
+          <ChevronLeft className="size-4" aria-hidden="true" />
+        </button>
+        <div
+          ref={trackRef}
+          role="scrollbar"
+          aria-controls={bodyId}
+          aria-orientation="horizontal"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={0}
+          aria-label="Timeline horizontal scroll"
+          onPointerDown={onTrackDown}
+          className="relative h-2.5 min-w-0 flex-1 cursor-pointer rounded-full bg-track"
+        >
+          <div
+            ref={thumbRef}
+            onPointerDown={onThumbDown}
+            className="absolute inset-y-0 left-0 w-full cursor-grab touch-none rounded-full bg-fg-muted/60 hover:bg-fg-muted active:cursor-grabbing"
+          />
         </div>
+        <button type="button" className={arrow} aria-label="Scroll timeline right" onClick={() => onStep(1)}>
+          <ChevronRight className="size-4" aria-hidden="true" />
+        </button>
       </div>
     </div>
   );
