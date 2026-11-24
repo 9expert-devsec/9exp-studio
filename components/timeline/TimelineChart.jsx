@@ -35,8 +35,10 @@ import { getTaskType, taskTypeTone } from "@/lib/tasks/types";
 export const LEFT_VARS = "[--tl-left:176px] sm:[--tl-left:380px]";
 const GROUP_H = 52;
 const TASK_H = 40;
-// One row = fixed height incl. its bottom border, identical in both columns.
-const rowBase = "flex items-center border-b border-line-subtle";
+// One row = fixed height incl. its bottom border, identical in both columns. Every row
+// is `relative`, so whatever is absolutely positioned inside it (bars, the sr-only
+// assignee name, …) is positioned against the row and clipped by the body scroller.
+const rowBase = "relative flex items-center border-b border-line-subtle";
 const assigneeCol = "hidden w-20 shrink-0 items-center justify-center sm:flex";
 
 /** Type icon, or the green check for a completed task. */
@@ -301,7 +303,7 @@ function GroupLeft({ row, collapsed, onToggle }) {
 function GroupRight({ row, win, dayWidth }) {
   const span = groupSpan(row.all);
   return (
-    <div className={`${rowBase} relative bg-track/25`} style={{ height: GROUP_H }}>
+    <div className={`${rowBase} bg-track/25`} style={{ height: GROUP_H }}>
       {span && (
         <span
           className="absolute top-1/2 flex h-5 -translate-y-1/2 items-center overflow-hidden whitespace-nowrap rounded-md bg-fg-muted/35 px-2 text-[11px] font-medium text-fg"
@@ -344,7 +346,7 @@ function TaskLeft({ task }) {
 function TaskRight({ task, win, dayWidth, nowMs }) {
   const span = taskSpan(task);
   return (
-    <div className={`${rowBase} relative`} style={{ height: TASK_H }}>
+    <div className={rowBase} style={{ height: TASK_H }}>
       {span &&
         (span.kind === "milestone" ? (
           <PostMilestone task={task} span={span} win={win} dayWidth={dayWidth} nowMs={nowMs} />
@@ -372,8 +374,8 @@ export function TimelineBody({ rows, collapsed, onToggle, win, dayWidth, months,
   const width = win.days * dayWidth;
   const items = flatRows(rows, collapsed);
   return (
-    <div className="flex min-h-0 flex-1 items-start overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]">
-      <div className="w-[var(--tl-left)] shrink-0 border-r border-line bg-card">
+    <div className="relative flex min-h-0 flex-1 items-start overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]">
+      <div className="relative w-[var(--tl-left)] shrink-0 border-r border-line bg-card">
         {items.map((it) =>
           it.row ? (
             <GroupLeft key={it.key} row={it.row} collapsed={collapsed.has(it.row.id)} onToggle={() => onToggle(it.row.id)} />

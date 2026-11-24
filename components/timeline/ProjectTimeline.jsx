@@ -142,7 +142,10 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
 
   // Card height: bounded to the viewport below the card's own top (document offset,
   // measured — no fixed numbers), written as --tl-top on the card. Re-measured when
-  // anything above it changes size (body resize) or the window resizes.
+  // anything above it changes size (body resize) or the window resizes. The page
+  // scroller is the window (AppShell has no inner scroll container: the shell is
+  // min-h-dvh in normal flow, the top bar is sticky to the viewport), so rect.top +
+  // scrollY is the document offset and does not change while the page scrolls.
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!card) return;
@@ -259,7 +262,7 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
       {/* Chart: a bounded card — fixed header, rows scrolling inside, strip pinned at the bottom. */}
       <div
         ref={cardRef}
-        className={`flex flex-col overflow-hidden rounded-[16px] border border-line bg-card ${LEFT_VARS}`}
+        className={`relative flex min-h-0 flex-col overflow-hidden rounded-[16px] border border-line bg-card ${LEFT_VARS}`}
         style={{ maxHeight: "max(420px, calc(100dvh - var(--tl-top, 0px) - 16px))" }}
       >
         <TimelineHeader win={win} dayWidth={dayWidth} months={months} scale={scale} headerRef={headerRef} />
