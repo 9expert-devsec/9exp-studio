@@ -56,6 +56,7 @@ import {
   PlayCircle,
   Plus,
   RefreshCw,
+  Send,
   Shapes,
   TriangleAlert,
   UserCheck,
@@ -66,6 +67,8 @@ import {
 } from "lucide-react";
 import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
 import StatusMoveForm from "@/components/tasks/StatusMoveForm";
+import ReviewDialog from "@/components/tasks/ReviewDialog";
+import ReviewsTab from "@/components/tasks/ReviewsTab";
 import Modal from "@/components/ui/Modal";
 import {
   getCachedPanel,
@@ -834,12 +837,15 @@ function Stepper({ stepper }) {
 
 /**
  * Current status + "Change status" (round 40): the SAME form as the task ⋯ menu
- * (components/tasks/StatusMoveForm.jsx), offering only the allowed moves.
+ * (components/tasks/StatusMoveForm.jsx), offering only the allowed moves. A move
+ * into รอตรวจสอบ swaps to the Submit form (round 46). Graphic (old layout, not
+ * redesigned): the review action (Review Design / Resubmit) sits under it.
  */
-function StatusTile({ panel }) {
+function StatusTile({ panel, onReview }) {
   const [open, setOpen] = useState(false);
   const task = panel.menuTask;
   const canChange = panel.canChangeStatus && !!task && (task.statusMoves?.length ?? 0) > 0;
+  const action = panel.review?.action ?? null;
   return (
     <div className="rounded-[14px] bg-card-inset p-3.5">
       <p className="text-xs text-fg-muted">Current Status</p>
@@ -852,8 +858,14 @@ function StatusTile({ panel }) {
           </button>
         )}
       </div>
+      {action && (
+        <div className="mt-3 flex flex-col gap-1.5">
+          {action.button && <PrimaryActionButton panel={panel} button={action.button} onReview={onReview} />}
+          <p className="text-xs text-fg-muted">{action.helper}</p>
+        </div>
+      )}
       {canChange && (
-        <Modal open={open} onClose={() => setOpen(false)} title="Change status" description={`${panel.idChip} · ${panel.title}`}>
+        <Modal open={open} onClose={() => setOpen(false)} title="Change status" description={`${panel.idChip} · ${panel.title}`} size="md">
           <StatusMoveForm task={task} onDone={() => setOpen(false)} onSaved={() => toast("Status updated")} />
         </Modal>
       )}
@@ -864,6 +876,13 @@ function StatusTile({ panel }) {
 function StatusColumn({ panel }) {
   const { stepper } = panel;
   const showAsset = !!panel.assetStatusLabel;
+  // Tabs are controlled here: "Review <Section>" switches to Reviews and focuses that card.
+  const [tab, setTab] = useState("activity");
+  const [focus, setFocus] = useState(null);
+  const onReview = (key) => {
+    setTab("reviews");
+    setFocus({ key, n: Date.now() });
+  };
   return (
     <div className="flex flex-col gap-3">
       <section aria-labelledby="task-status-heading" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
@@ -885,58 +904,65 @@ function StatusColumn({ panel }) {
           <Stepper stepper={stepper} />
         </div>
         {panel.clip ? (
-          <ClipStatusCard panel={panel} />
+          <ClipStatusCard panel={panel} onReview={onReview} />
         ) : (
-        <div className={`mt-4 grid gap-3 ${showAsset ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-          <StatusTile panel={panel} />
-          {showAsset && (
-            <div className="rounded-[14px] bg-card-inset p-3.5">
-              <p className="text-xs text-fg-muted">Asset Status</p>
-              <p className="mt-2">
-                <AssetStatusChip status={panel.assetStatus} label={panel.assetStatusLabel} />
-              </p>
-            </div>
-          )}
-          <div className="rounded-[14px] bg-card-inset p-3.5">
-            <p className="text-xs text-fg-muted">Progress</p>
-            {stepper.percent == null ? (
-              <p className="mt-1.5 text-xl font-bold text-fg-muted">—</p>
-            ) : (
-              <div className="mt-1.5 flex items-center gap-3">
-                <span className="text-xl font-bold text-fg">{stepper.percent}%</span>
-                <span
-                  role="progressbar"
-                  aria-label="Task progress"
-                  aria-valuenow={stepper.percent}
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  className="h-2 flex-1 overflow-hidden rounded-full bg-track"
-                >
-                  <span className="block h-full rounded-full bg-brand-500" style={{ width: `${stepper.percent}%` }} />
-                </span>
+          <div className={`mt-4 grid gap-3 ${showAsset ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+            <StatusTile panel={panel} onReview={onReview} />
+            {showAsset && (
+              <div className="rounded-[14px] bg-card-inset p-3.5">
+                <p className="text-xs text-fg-muted">Asset Status</p>
+                <p className="mt-2">
+                  <AssetStatusChip status={panel.assetStatus} label={panel.assetStatusLabel} />
+                </p>
               </div>
             )}
+            <div className="rounded-[14px] bg-card-inset p-3.5">
+              <p className="text-xs text-fg-muted">Progress</p>
+              {stepper.percent == null ? (
+                <p className="mt-1.5 text-xl font-bold text-fg-muted">—</p>
+              ) : (
+                <div className="mt-1.5 flex items-center gap-3">
+                  <span className="text-xl font-bold text-fg">{stepper.percent}%</span>
+                  <span
+                    role="progressbar"
+                    aria-label="Task progress"
+                    aria-valuenow={stepper.percent}
+                    aria-valuemin={0}
+                    aria-valuemax={100}
+                    className="h-2 flex-1 overflow-hidden rounded-full bg-track"
+                  >
+                    <span className="block h-full rounded-full bg-brand-500" style={{ width: `${stepper.percent}%` }} />
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
         )}
       </section>
 
       <section aria-label="Task tabs" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
-        <TaskTabs panel={panel} />
+        <TaskTabs panel={panel} tab={tab} setTab={setTab} focus={focus} />
       </section>
     </div>
   );
 }
 
-// ── Clip: Current Status + primary action (round 45) ───────────────────────
+// ── Clip: Current Status + primary action (rounds 45–46) ───────────────────
 
 const STATUS_ICON = {
+  waiting_review: { Icon: Eye, tone: "bg-brand-500/15 text-accent-fg" },
   revising: { Icon: TriangleAlert, tone: "bg-warning/15 text-warning" },
   done: { Icon: CircleCheck, tone: "bg-success/15 text-success" },
   paused: { Icon: PauseCircle, tone: "bg-warning/15 text-warning" },
   cancelled: { Icon: XCircle, tone: "bg-danger/10 text-danger" },
 };
 const DEFAULT_STATUS_ICON = { Icon: Hourglass, tone: "bg-accent-soft text-accent-fg" };
+// Review states read "<English> · <Thai>" (Figma 341:1293 / 341:2231 / 341:2913).
+const REVIEW_TITLE = {
+  waiting_review: ["In Review", null],
+  revising: ["Revision Required", "ต้องแก้ไข"],
+  done: ["Completed", null],
+};
 
 /** "ตั้งแต่ <when> · โดย <who>", or "อัตโนมัติจาก Production "…" · <when>" (latest status change). */
 function statusContextLine(c) {
@@ -945,9 +971,24 @@ function statusContextLine(c) {
   return `ตั้งแต่ ${c.atLabel}${c.by ? ` · โดย ${c.by}` : ""}`;
 }
 
-/** The ONE primary button: a plain status move (changeTaskStatusAction → canTransition) or Copy File Location. */
-function PrimaryActionButton({ panel, button }) {
+/** Round 46: the review cycle's line for รอตรวจ / แก้ไข / เสร็จสมบูรณ์, else null. */
+function reviewContextLine(panel) {
+  const cur = panel.review?.current;
+  if (!cur) return null;
+  if (panel.status === "waiting_review" && cur.status === "open") return `ส่งตรวจ ${cur.submittedAtLabel}`;
+  if (panel.status === "revising" && cur.status === "revision") return `ผลตรวจ ${cur.closedAtLabel}`;
+  if (panel.status === "done" && cur.status === "passed") return `ผ่านครบ ${cur.total} ส่วน · ${cur.closedAtLabel} · อัตโนมัติ`;
+  return null;
+}
+
+/**
+ * The ONE primary button: a plain status move (changeTaskStatusAction →
+ * canTransition), Submit / Resubmit (the review dialog), Review <Section>
+ * (switches to the Reviews tab) or Copy File Location.
+ */
+function PrimaryActionButton({ panel, button, onReview }) {
   const [pending, startTransition] = useTransition();
+  const [dialog, setDialog] = useState(false);
   if (button.kind === "copy") {
     const copy = async () => {
       try {
@@ -958,10 +999,34 @@ function PrimaryActionButton({ panel, button }) {
       }
     };
     return (
-      <button type="button" onClick={copy} className={buttonClass("secondary", "w-full")}>
+      <button type="button" onClick={copy} disabled={!!button.disabled} className={buttonClass("outline", "w-full")}>
         <Copy className="size-4" aria-hidden="true" />
         {button.label}
       </button>
+    );
+  }
+  if (button.kind === "review") {
+    return (
+      <button type="button" onClick={() => onReview?.(button.section)} className={buttonClass("primary", "w-full")}>
+        <Eye className="size-4" aria-hidden="true" />
+        {button.label}
+      </button>
+    );
+  }
+  if (button.kind === "submit" || button.kind === "resubmit") {
+    return (
+      <>
+        <button type="button" onClick={() => setDialog(true)} className={buttonClass("primary", "w-full")}>
+          <Send className="size-4" aria-hidden="true" />
+          {button.label}
+        </button>
+        <ReviewDialog
+          task={{ id: panel.id, projectId: panel.projectId, contentId: panel.contentId }}
+          open={dialog}
+          onClose={() => setDialog(false)}
+          mode={button.kind}
+        />
+      </>
     );
   }
   const move = () => {
@@ -986,11 +1051,12 @@ function PrimaryActionButton({ panel, button }) {
   );
 }
 
-function ClipStatusCard({ panel }) {
+function ClipStatusCard({ panel, onReview }) {
   const { clip } = panel;
   const action = clip.primaryAction;
   const { Icon, tone } = STATUS_ICON[panel.status] ?? DEFAULT_STATUS_ICON;
   const isCopy = action?.button?.kind === "copy";
+  const title = REVIEW_TITLE[panel.status];
   return (
     <div className={`mt-4 grid gap-3 ${action ? "sm:grid-cols-2" : ""}`}>
       <div className="flex gap-3 rounded-[14px] bg-card-inset p-3.5">
@@ -1003,14 +1069,22 @@ function ClipStatusCard({ panel }) {
             <Lock className="size-3" aria-hidden="true" />
             <span className="sr-only">(changes through the actions)</span>
           </p>
-          <p className="mt-0.5 text-lg font-bold leading-snug text-fg">{panel.statusLabel}</p>
-          <p className="mt-0.5 break-words text-xs text-fg-muted">{statusContextLine(clip.statusContext)}</p>
+          <p className="mt-0.5 text-lg font-bold leading-snug text-fg">
+            {title ? (
+              <>
+                {title[0]} <span className="text-sm font-normal text-fg-muted">· {title[1] ?? panel.statusLabel}</span>
+              </>
+            ) : (
+              panel.statusLabel
+            )}
+          </p>
+          <p className="mt-0.5 break-words text-xs text-fg-muted">{reviewContextLine(panel) ?? statusContextLine(clip.statusContext)}</p>
         </div>
       </div>
       {action && (
         <div className="flex min-w-0 flex-col justify-center gap-2 rounded-[14px] border border-line p-3.5">
-          {action.button && <PrimaryActionButton panel={panel} button={action.button} />}
-          <p title={isCopy ? action.helper : undefined} className={`text-xs text-fg-muted ${isCopy ? "truncate font-mono" : ""}`}>
+          {action.button && <PrimaryActionButton panel={panel} button={action.button} onReview={onReview} />}
+          <p title={isCopy ? action.helper : undefined} className={`text-xs text-fg-muted ${isCopy ? "truncate" : ""}`}>
             {action.helper}
           </p>
         </div>
@@ -1019,29 +1093,29 @@ function ClipStatusCard({ panel }) {
   );
 }
 
-// ── Tabs (round 45: Activity · Work Plan · Reviews, the same for every type) ──
+// ── Tabs (Activity · Work Plan · Reviews, the same for every type) ──────────
 
-const TABS = [
-  { key: "activity", label: "Activity" },
-  { key: "work_plan", label: "Work Plan" }, // round 47
-  { key: "reviews", label: "Reviews" }, // round 46
-];
-
-function TaskTabs({ panel }) {
-  const [tab, setTab] = useState("activity");
+function TaskTabs({ panel, tab, setTab, focus }) {
+  // Reviews (N): sections waiting on THIS viewer (hidden at 0).
+  const reviewCount = panel.review?.mine.length ?? 0;
+  const tabs = [
+    { key: "activity", label: "Activity" },
+    { key: "work_plan", label: "Work Plan" }, // round 47
+    { key: "reviews", label: reviewCount ? `Reviews (${reviewCount})` : "Reviews" },
+  ];
   const onKeyDown = (e) => {
-    const i = TABS.findIndex((t) => t.key === tab);
-    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 }[e.key];
+    const i = tabs.findIndex((t) => t.key === tab);
+    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: tabs.length - 1 }[e.key];
     if (next == null) return;
     e.preventDefault();
-    const t = TABS[(next + TABS.length) % TABS.length];
+    const t = tabs[(next + tabs.length) % tabs.length];
     setTab(t.key);
     document.getElementById(`task-tab-${t.key}`)?.focus();
   };
   return (
     <>
       <div role="tablist" aria-label="Task sections" onKeyDown={onKeyDown} className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const selected = t.key === tab;
           return (
             <button
@@ -1065,8 +1139,12 @@ function TaskTabs({ panel }) {
       <div id={`task-panel-${tab}`} role="tabpanel" aria-labelledby={`task-tab-${tab}`} className="pt-4">
         {tab === "activity" ? (
           <ActivityTimeline key={`${panel.id}:${panel.activity.entries[0]?.id ?? "none"}`} taskId={panel.id} initial={panel.activity} />
+        ) : tab === "reviews" && panel.review ? (
+          <ReviewsTab panel={panel} focus={focus} />
         ) : (
-          <p className="rounded-[12px] bg-card-inset py-10 text-center text-sm text-fg-muted">เร็ว ๆ นี้</p>
+          <p className="rounded-[12px] bg-card-inset py-10 text-center text-sm text-fg-muted">
+            {tab === "reviews" ? "งานประเภทนี้ไม่มีการตรวจ" : "เร็ว ๆ นี้"}
+          </p>
         )}
       </div>
     </>
@@ -1081,6 +1159,7 @@ const FILTERS = [
   { key: "edits", label: "Edits" },
   { key: "people", label: "People" },
   { key: "assets", label: "Assets" },
+  { key: "reviews", label: "Reviews" },
 ];
 const KIND = {
   created: { Icon: Plus, tone: "bg-track text-fg" },
@@ -1089,6 +1168,9 @@ const KIND = {
   assignee_changed: { Icon: UserRound, tone: "bg-info/10 text-info" },
   reviewer_changed: { Icon: UserCheck, tone: "bg-info/10 text-info" },
   assets_changed: { Icon: Layers, tone: "bg-warning/15 text-warning" },
+  review_submitted: { Icon: Send, tone: "bg-brand-500/15 text-accent-fg" },
+  review_verdict: { Icon: Eye, tone: "bg-info/10 text-info" },
+  review_withdrawn: { Icon: XCircle, tone: "bg-track text-fg-muted" },
 };
 
 function ActivityTimeline({ taskId, initial }) {

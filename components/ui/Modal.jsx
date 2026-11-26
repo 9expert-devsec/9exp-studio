@@ -15,7 +15,9 @@ import { X } from "lucide-react";
 const FIRST_FIELD =
   "input:not([type=hidden]):not([type=file]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])";
 
-export default function Modal({ open, onClose, title, description, closeOnBackdrop = false, children }) {
+const WIDTH = { sm: "max-w-lg", md: "max-w-[35rem]" }; // md ≈ 560px (round 46 review dialogs)
+
+export default function Modal({ open, onClose, title, description, closeOnBackdrop = false, size = "sm", children }) {
   const ref = useRef(null);
   const titleId = useId();
   const descId = useId();
@@ -40,7 +42,7 @@ export default function Modal({ open, onClose, title, description, closeOnBackdr
       onClick={closeOnBackdrop ? (e) => e.target === e.currentTarget && onClose?.() : undefined}
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
-      className="m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-[24px] border border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50"
+      className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${WIDTH[size] ?? WIDTH.sm} overflow-y-auto rounded-[24px] border border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50`}
     >
       {open && (
         <div className="p-6">

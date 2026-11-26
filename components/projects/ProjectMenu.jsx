@@ -570,7 +570,7 @@ export function TaskMenu({ task, onDeleted }) {
       aside={
         <>
           {task.canChangeStatus && (
-            <Modal open={dialog === "status"} onClose={close} title="Change status" description={`${idLabel} · ${task.title}`}>
+            <Modal open={dialog === "status"} onClose={close} title="Change status" description={`${idLabel} · ${task.title}`} size="md">
               <StatusMoveForm task={task} onDone={close} />
             </Modal>
           )}

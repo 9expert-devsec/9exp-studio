@@ -15,6 +15,15 @@ const { ObjectId } = mongoose.Schema.Types;
 //   assets_changed   { added, removed }             — Post/Article related assets
 //   people_changed   { role, added: [name], removed: [name] } — Production
 //                    Videographers / Presenters (round 38; names stored)
+// Review cycles (round 46, lib/tasks/reviews.js):
+//   review_submitted { cycleNo, link, from, to, resubmit, sections: [label],
+//                      reviewers: [{ section, name }] } — Submit / Resubmit
+//   review_verdict   { cycleNo, section, verdict: pass|fail, feedback,
+//                      reviewerName, onBehalf }     — actor = who decided
+//   review_withdrawn { cycleNo, to }               — the status left review
+//                      by an escape hatch ("ยกเลิกการส่งตรวจ")
+//   status_changed   may carry `review: { cycleNo, result }` = the automatic
+//                    move after the last verdict (actor null = System)
 // Deleted with the task (and with its content).
 export const ACTIVITY_TYPES = [
   "created",
@@ -24,6 +33,9 @@ export const ACTIVITY_TYPES = [
   "reviewer_changed",
   "assets_changed",
   "people_changed",
+  "review_submitted",
+  "review_verdict",
+  "review_withdrawn",
 ];
 
 const TaskActivitySchema = new mongoose.Schema(

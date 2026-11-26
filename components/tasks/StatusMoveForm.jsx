@@ -6,6 +6,8 @@ import { changeTaskStatusAction } from "@/app/(app)/projects/task-actions";
 import { invalidateTaskPanel } from "@/components/tasks/panelCache";
 import { StatusDot } from "@/components/projects/ProjectBits";
 import { buttonClass } from "@/components/ui/Button";
+import { ReviewForm } from "@/components/tasks/ReviewDialog";
+import { needsSubmit } from "@/lib/tasks/reviews";
 
 // "Change status" (round 40) — ONE component for the task ⋯ menu and Task Detail.
 // Shows only the moves the server computed (task.statusMoves, from
@@ -13,6 +15,8 @@ import { buttonClass } from "@/components/ui/Button";
 // back / pause / resume / reopen, then Cancel (destructive, confirmed once), then
 // — for superadmin / project owner — "Set status…" with the rest. The action
 // re-checks every move (canTransition).
+// Round 46: a move into รอตรวจ / รอตรวจสอบ (Clip / Graphic, task.reviewable) is
+// never a plain change — choosing it swaps this form to Submit for Review.
 
 const HINT = { back: "Back one step", pause: "Pause", resume: "Resume", reopen: "Reopen" };
 
@@ -60,6 +64,7 @@ export default function StatusMoveForm({ task, onDone, onSaved }) {
 
   const [status, setStatus] = useState("");
   const [confirming, setConfirming] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [pending, startTransition] = useTransition();
   const chosen = moves.find((m) => m.key === status) ?? null;
@@ -88,6 +93,7 @@ export default function StatusMoveForm({ task, onDone, onSaved }) {
     e.preventDefault();
     if (!chosen) return setError("Choose a status.");
     if (chosen.kind === "cancel" && !confirming) return setConfirming(true);
+    if (task.reviewable && needsSubmit(task.type, chosen.key)) return setSubmitting(true);
     save();
   };
 
@@ -102,6 +108,8 @@ export default function StatusMoveForm({ task, onDone, onSaved }) {
       </button>
     </div>
   );
+
+  if (submitting) return <ReviewForm task={task} onDone={onDone} showHeading />;
 
   if (confirming) {
     return (
@@ -141,7 +149,10 @@ export default function StatusMoveForm({ task, onDone, onSaved }) {
         </p>
       )}
       <p role="alert" className="min-h-5 text-sm text-danger">{error}</p>
-      {actions(chosen?.kind === "cancel" ? "Cancel task…" : "Save", false)}
+      {actions(
+        chosen?.kind === "cancel" ? "Cancel task…" : task.reviewable && chosen && needsSubmit(task.type, chosen.key) ? "Next: Submit for Review" : "Save",
+        false
+      )}
     </form>
   );
 }

@@ -42,6 +42,8 @@ import { assetRows } from "@/lib/tasks/assetRows";
 import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
 import { createTaskFolder, discardFolder } from "@/lib/tasks/folderCounter";
 import { applySourceReady, applySourceReadyForClip } from "@/lib/tasks/sourceReady";
+import { needsSubmit, reviewMoveOpts } from "@/lib/tasks/reviews";
+import { deleteReviews, withdrawOpenCycle } from "@/lib/tasks/reviewStore";
 import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
 import TaskFolder from "@/models/TaskFolder";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
@@ -317,12 +319,15 @@ export async function changeTaskStatusAction(formData) {
   const status = str(formData.get("status"));
   if (!isValidStatus(task.type, status)) return fail("Choose a status for this task type.");
   if (status === task.status) return { ok: true };
+  // Round 46: into รอตรวจ only through Submit for Review (review-actions.js).
+  if (needsSubmit(task.type, status)) return fail("Use Submit for Review to send this task for review.");
 
   // Round 40: only the arrows + escape hatches (or an override) — lib/tasks/transitions.js.
   const move = canTransition(task.type, task.status, status, {
     canOverride: canOverrideTaskStatus(viewer, project),
     hasRelatedAssets: taskHasRelatedAssets(task),
     statusBeforeHold: task.statusBeforeHold ?? null,
+    ...reviewMoveOpts(task.type), // round 46: out of รอตรวจ forward only by verdicts
   });
   if (!move.ok) return fail(move.reason);
 
@@ -348,6 +353,8 @@ export async function changeTaskStatusAction(formData) {
   // Round 45: a Production now เสร็จสมบูรณ์ → its linked Clips at รอ Source move
   // to รอตัดต่อ (lib/tasks/sourceReady.js; legal arrows only, never backwards).
   if (task.type === "production") await applySourceReady({ ...task, status });
+  // Round 46: left รอตรวจ by an escape hatch → the open review cycle is withdrawn.
+  await withdrawOpenCycle(task, { from: task.status, to: status, actor: viewer.id });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -375,6 +382,7 @@ export async function deleteTaskAction(formData) {
   await Task.deleteOne({ _id: task._id, content: content._id, project: project._id });
   await deletePhotos(removedPhotoIds(task.details, {}));
   await deleteActivity([task._id]);
+  await deleteReviews([task._id]);
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();

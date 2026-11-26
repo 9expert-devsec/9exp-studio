@@ -28,6 +28,7 @@ import { duplicateKeyKind, duplicateKeyMessage } from "@/lib/projects/dupKey";
 import { parseContentForm } from "@/lib/projects/validate";
 import { buildContentCopy, buildTaskCopy } from "@/lib/tasks/duplicate";
 import { deleteActivity, logActivity } from "@/lib/tasks/activity";
+import { deleteReviews } from "@/lib/tasks/reviewStore";
 import { getTaskType } from "@/lib/tasks/types";
 import Content from "@/models/Content";
 import Task from "@/models/Task";
@@ -227,6 +228,7 @@ export async function deleteContentAction(formData) {
   const taskIds = (await Task.find({ content: content._id, project: project._id }).select("_id").lean()).map((t) => t._id);
   await Task.deleteMany({ content: content._id, project: project._id });
   await deleteActivity(taskIds);
+  await deleteReviews(taskIds);
   await Content.deleteOne({ _id: content._id, project: project._id });
   await recomputeRollups({ projectId: project._id });
 
