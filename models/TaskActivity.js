@@ -22,6 +22,10 @@ const { ObjectId } = mongoose.Schema.Types;
 //                      reviewerName, onBehalf }     — actor = who decided
 //   review_withdrawn { cycleNo, to }               — the status left review
 //                      by an escape hatch ("ยกเลิกการส่งตรวจ")
+// Work Plan (round 47, lib/tasks/workplan.js):
+//   work_plan        { action: plans_added|plan_edited|plan_moved|plan_deleted|
+//                      log_added|log_edited|log_deleted|plan_past_due,
+//                      personName, count?, minutes?, date?, from?, days?, onBehalf }
 //   status_changed   may carry `review: { cycleNo, result }` = the automatic
 //                    move after the last verdict (actor null = System)
 // Deleted with the task (and with its content).
@@ -36,6 +40,7 @@ export const ACTIVITY_TYPES = [
   "review_submitted",
   "review_verdict",
   "review_withdrawn",
+  "work_plan",
 ];
 
 const TaskActivitySchema = new mongoose.Schema(

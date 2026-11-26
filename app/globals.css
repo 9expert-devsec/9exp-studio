@@ -65,6 +65,12 @@
   --ds-warning: #b45309;
   --ds-danger: #dc2626;
 
+  /* Work Plan "Plan" colour (round 47; not in the Figma tone set yet): block fill,
+     text on card, soft card tint. Actual uses the brand orange. */
+  --ds-plan: #8b7cf6;
+  --ds-plan-fg: #5b45d6;
+  --ds-plan-soft: #f3f1ff;
+
   /* Floating navbar: navy in both themes; only outline and shadow change. */
   --ds-nav-bg: #0d1b2a;
   --ds-nav-border: #e0e6ed;
@@ -94,6 +100,10 @@
   --ds-warning: #fcd34d;
   --ds-danger: #f87171;
 
+  --ds-plan: #9d90ff;
+  --ds-plan-fg: #c4bcff;
+  --ds-plan-soft: #25233f;
+
   --ds-nav-bg: #0d1b2a;
   --ds-nav-border: rgba(255, 255, 255, 0.1);
   --ds-nav-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
@@ -122,6 +132,9 @@
   --color-success: var(--ds-success);
   --color-warning: var(--ds-warning);
   --color-danger: var(--ds-danger);
+  --color-plan: var(--ds-plan);
+  --color-plan-fg: var(--ds-plan-fg);
+  --color-plan-soft: var(--ds-plan-soft);
 
   --color-nav-bg: var(--ds-nav-bg);
   --color-nav-border: var(--ds-nav-border);

@@ -14,7 +14,7 @@
 // the task's type. Right column: Status & Progress (stepper, current status with
 // an inline change, Post asset status, progress) and the tabs — Activity · Work
 // Plan · Reviews · Comments (round 46: Reviews for Clip / Graphic and Comments are
-// live; Work Plan says "เร็ว ๆ นี้" until round 47).
+// live; round 47: Work Plan, every type — components/tasks/WorkPlanTab.jsx).
 // Clip (round 45, Figma 341:*): its own left column (ClipInfoColumn, with the
 // Related Production card) and, under the 5-step stepper, the Current Status
 // card with ONE primary action (lib/tasks/clipFlow.js clipPrimaryAction).
@@ -70,6 +70,7 @@ import StatusMoveForm from "@/components/tasks/StatusMoveForm";
 import ReviewDialog from "@/components/tasks/ReviewDialog";
 import ReviewsTab from "@/components/tasks/ReviewsTab";
 import CommentsTab from "@/components/tasks/CommentsTab";
+import WorkPlanTab from "@/components/tasks/WorkPlanTab";
 import Modal from "@/components/ui/Modal";
 import {
   getCachedPanel,
@@ -1101,7 +1102,7 @@ function TaskTabs({ panel, tab, setTab, focus }) {
   const reviewCount = panel.review?.mine.length ?? 0;
   const tabs = [
     { key: "activity", label: "Activity" },
-    { key: "work_plan", label: "Work Plan" }, // round 47
+    { key: "work_plan", label: "Work Plan" },
     { key: "reviews", label: reviewCount ? `Reviews (${reviewCount})` : "Reviews" },
     // Comments (N): non-deleted comments (hidden at 0).
     { key: "comments", label: panel.comments?.count ? `Comments (${panel.comments.count})` : "Comments" },
@@ -1142,6 +1143,8 @@ function TaskTabs({ panel, tab, setTab, focus }) {
       <div id={`task-panel-${tab}`} role="tabpanel" aria-labelledby={`task-tab-${tab}`} className="pt-4">
         {tab === "activity" ? (
           <ActivityTimeline key={`${panel.id}:${panel.activity.entries[0]?.id ?? "none"}`} taskId={panel.id} initial={panel.activity} />
+        ) : tab === "work_plan" && panel.workPlan ? (
+          <WorkPlanTab key={panel.id} panel={panel} />
         ) : tab === "reviews" && panel.review ? (
           <ReviewsTab panel={panel} focus={focus} />
         ) : tab === "comments" && panel.comments ? (
@@ -1165,6 +1168,7 @@ const FILTERS = [
   { key: "people", label: "People" },
   { key: "assets", label: "Assets" },
   { key: "reviews", label: "Reviews" },
+  { key: "workplan", label: "Work Plan" },
 ];
 const KIND = {
   created: { Icon: Plus, tone: "bg-track text-fg" },
@@ -1176,6 +1180,7 @@ const KIND = {
   review_submitted: { Icon: Send, tone: "bg-brand-500/15 text-accent-fg" },
   review_verdict: { Icon: Eye, tone: "bg-info/10 text-info" },
   review_withdrawn: { Icon: XCircle, tone: "bg-track text-fg-muted" },
+  work_plan: { Icon: CalendarDays, tone: "bg-plan-soft text-plan-fg" },
 };
 
 function ActivityTimeline({ taskId, initial }) {

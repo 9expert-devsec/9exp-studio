@@ -45,6 +45,7 @@ import { applySourceReady, applySourceReadyForClip } from "@/lib/tasks/sourceRea
 import { needsSubmit, reviewMoveOpts } from "@/lib/tasks/reviews";
 import { deleteReviews, withdrawOpenCycle } from "@/lib/tasks/reviewStore";
 import { deleteComments } from "@/lib/tasks/comments";
+import { deleteWorkEntries } from "@/lib/tasks/workplanStore";
 import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
 import TaskFolder from "@/models/TaskFolder";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
@@ -385,6 +386,7 @@ export async function deleteTaskAction(formData) {
   await deleteActivity([task._id]);
   await deleteReviews([task._id]);
   await deleteComments([task._id]);
+  await deleteWorkEntries([task._id]);
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
