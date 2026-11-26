@@ -6,6 +6,7 @@
 // outcome function cycleOutcome); status moves still go through
 // lib/tasks/transitions.js canTransition.
 //
+// Resubmit vs full cycle: resubmitBase() (round 46.1), whatever the task's status.
 // Scope: like task-actions.js — viewer from the DB, project via
 // findViewableProject, content within it, task within both.
 //   submit / resubmit  canChangeTaskStatus (the round-40/45 rule for the status button)
@@ -25,13 +26,13 @@ import {
 import { recomputeRollups } from "@/lib/projects/progress";
 import { canOverrideTaskStatus } from "@/lib/permissions";
 import { logActivity } from "@/lib/tasks/activity";
-import { latestCycle } from "@/lib/tasks/reviewStore";
+import { loadCycles } from "@/lib/tasks/reviewStore";
 import {
   REVIEW_STATUS,
   buildCycle,
   canRecordVerdict,
   cycleOutcome,
-  isResubmit,
+  resubmitBase,
   isReviewType,
   reviewSections,
   reviewerChanges,
@@ -73,8 +74,6 @@ const submitMove = (viewer, project, task) =>
     statusBeforeHold: task.statusBeforeHold ?? null,
   });
 
-/** The cycle a submit continues from: the latest one, only while the task is at แก้ไข. */
-const continuesFrom = (task, latest) => (task.status === REVIEW_STATUS.revise && isResubmit(latest) ? latest : null);
 
 const storedReviewers = (task) =>
   Object.fromEntries(reviewSections(task.type).map((sec) => [sec.key, idStr(task.details?.[sec.reviewerField])]));
@@ -101,8 +100,8 @@ export async function loadReviewFormAction(projectId, contentId, taskId) {
   if (!isReviewType(task.type)) return fail("This task type has no review.");
   if (!canChangeTaskStatus(viewer, project, task)) return fail("You can't submit this task for review.");
 
-  const latest = await latestCycle(task._id);
-  const prev = continuesFrom(task, latest);
+  // Resubmit or full cycle: decided here from the stored cycles (lib/tasks/reviews.js resubmitBase).
+  const prev = resubmitBase(await loadCycles(task._id));
   const [elig, roles] = await Promise.all([taskEligibility(project, task.type), Role.find().select("key name").lean()]);
   const roleName = new Map(roles.map((r) => [r.key, r.name]));
   const row = (u, extra = {}) => ({
@@ -156,9 +155,12 @@ export async function submitReviewAction(formData) {
   const move = submitMove(viewer, project, task);
   if (!move.ok) return fail(move.reason);
 
-  const latest = await latestCycle(task._id);
+  const cycles = await loadCycles(task._id); // newest first
+  const latest = cycles[0] ?? null;
   if (latest?.status === "open") return fail("This task already has an open review. Reload and try again.");
-  const prev = continuesFrom(task, latest);
+  // Never trusts the client about the mode: resubmit when the newest closed,
+  // non-withdrawn cycle ended as "revision" (round 46.1).
+  const prev = resubmitBase(cycles);
 
   let reviewersIn = {};
   try {

@@ -11,6 +11,7 @@ import { addCommentAction, deleteCommentAction, editCommentAction } from "@/app/
 import { invalidateTaskPanel } from "@/components/tasks/panelCache";
 import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
+import Modal from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
 
 const URL_RE = /(https?:\/\/[^\s<>"']+)/g;
@@ -100,6 +101,7 @@ function CommentItem({ c }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(c.text);
   const [pending, startTransition] = useTransition();
+  const [confirming, setConfirming] = useState(false);
 
   const run = (fn, done) =>
     startTransition(async () => {
@@ -113,10 +115,8 @@ function CommentItem({ c }) {
     if (!draft.trim() || pending) return;
     run(() => editCommentAction(c.id, draft), () => setEditing(false));
   };
-  const remove = () => {
-    if (!window.confirm("ลบความคิดเห็นนี้?")) return;
-    run(() => deleteCommentAction(c.id));
-  };
+  // Same confirm pattern as Delete content (ProjectMenu.jsx DeleteContentDialog).
+  const remove = () => run(() => deleteCommentAction(c.id), () => setConfirming(false));
 
   return (
     <article className="flex gap-3">
@@ -148,7 +148,7 @@ function CommentItem({ c }) {
               {c.canDelete && (
                 <button
                   type="button"
-                  onClick={remove}
+                  onClick={() => setConfirming(true)}
                   disabled={pending}
                   aria-label="ลบความคิดเห็น"
                   className="flex size-7 items-center justify-center rounded-[8px] text-fg-muted hover:bg-card hover:text-danger focus-visible:outline-2 focus-visible:outline-brand-500"
@@ -189,6 +189,25 @@ function CommentItem({ c }) {
           </div>
         )}
       </div>
+      {c.canDelete && (
+        <Modal
+          open={confirming}
+          onClose={() => setConfirming(false)}
+          closeOnBackdrop
+          title="ลบความคิดเห็น?"
+          description="ความคิดเห็นนี้จะแสดงเป็น “ความคิดเห็นถูกลบ”"
+        >
+          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => setConfirming(false)} className={buttonClass("secondary")} data-autofocus>
+              ยกเลิก
+            </button>
+            <button type="button" onClick={remove} disabled={pending} className={buttonClass("danger")}>
+              {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+              ลบ
+            </button>
+          </div>
+        </Modal>
+      )}
     </article>
   );
 }
