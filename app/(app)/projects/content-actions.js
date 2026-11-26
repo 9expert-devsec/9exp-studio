@@ -29,6 +29,7 @@ import { parseContentForm } from "@/lib/projects/validate";
 import { buildContentCopy, buildTaskCopy } from "@/lib/tasks/duplicate";
 import { deleteActivity, logActivity } from "@/lib/tasks/activity";
 import { deleteReviews } from "@/lib/tasks/reviewStore";
+import { deleteComments } from "@/lib/tasks/comments";
 import { getTaskType } from "@/lib/tasks/types";
 import Content from "@/models/Content";
 import Task from "@/models/Task";
@@ -229,6 +230,7 @@ export async function deleteContentAction(formData) {
   await Task.deleteMany({ content: content._id, project: project._id });
   await deleteActivity(taskIds);
   await deleteReviews(taskIds);
+  await deleteComments(taskIds);
   await Content.deleteOne({ _id: content._id, project: project._id });
   await recomputeRollups({ projectId: project._id });
 

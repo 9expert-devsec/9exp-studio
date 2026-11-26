@@ -13,8 +13,8 @@
 // Left column: type + ID chips, title, description, the info rows that apply to
 // the task's type. Right column: Status & Progress (stepper, current status with
 // an inline change, Post asset status, progress) and the tabs — Activity · Work
-// Plan · Reviews (round 45: Activity is live; the other two say "เร็ว ๆ นี้" until
-// rounds 47 / 46).
+// Plan · Reviews · Comments (round 46: Reviews for Clip / Graphic and Comments are
+// live; Work Plan says "เร็ว ๆ นี้" until round 47).
 // Clip (round 45, Figma 341:*): its own left column (ClipInfoColumn, with the
 // Related Production card) and, under the 5-step stepper, the Current Status
 // card with ONE primary action (lib/tasks/clipFlow.js clipPrimaryAction).
@@ -69,6 +69,7 @@ import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } f
 import StatusMoveForm from "@/components/tasks/StatusMoveForm";
 import ReviewDialog from "@/components/tasks/ReviewDialog";
 import ReviewsTab from "@/components/tasks/ReviewsTab";
+import CommentsTab from "@/components/tasks/CommentsTab";
 import Modal from "@/components/ui/Modal";
 import {
   getCachedPanel,
@@ -1093,7 +1094,7 @@ function ClipStatusCard({ panel, onReview }) {
   );
 }
 
-// ── Tabs (Activity · Work Plan · Reviews, the same for every type) ──────────
+// ── Tabs (Activity · Work Plan · Reviews · Comments, the same for every type) ──
 
 function TaskTabs({ panel, tab, setTab, focus }) {
   // Reviews (N): sections waiting on THIS viewer (hidden at 0).
@@ -1102,6 +1103,8 @@ function TaskTabs({ panel, tab, setTab, focus }) {
     { key: "activity", label: "Activity" },
     { key: "work_plan", label: "Work Plan" }, // round 47
     { key: "reviews", label: reviewCount ? `Reviews (${reviewCount})` : "Reviews" },
+    // Comments (N): non-deleted comments (hidden at 0).
+    { key: "comments", label: panel.comments?.count ? `Comments (${panel.comments.count})` : "Comments" },
   ];
   const onKeyDown = (e) => {
     const i = tabs.findIndex((t) => t.key === tab);
@@ -1141,6 +1144,8 @@ function TaskTabs({ panel, tab, setTab, focus }) {
           <ActivityTimeline key={`${panel.id}:${panel.activity.entries[0]?.id ?? "none"}`} taskId={panel.id} initial={panel.activity} />
         ) : tab === "reviews" && panel.review ? (
           <ReviewsTab panel={panel} focus={focus} />
+        ) : tab === "comments" && panel.comments ? (
+          <CommentsTab taskId={panel.id} comments={panel.comments} />
         ) : (
           <p className="rounded-[12px] bg-card-inset py-10 text-center text-sm text-fg-muted">
             {tab === "reviews" ? "งานประเภทนี้ไม่มีการตรวจ" : "เร็ว ๆ นี้"}
