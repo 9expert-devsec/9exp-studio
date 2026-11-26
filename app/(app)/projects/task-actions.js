@@ -41,6 +41,7 @@ import { escapeRegex } from "@/lib/projects/rules";
 import { assetRows } from "@/lib/tasks/assetRows";
 import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
 import { createTaskFolder, discardFolder } from "@/lib/tasks/folderCounter";
+import { applySourceReady, applySourceReadyForClip } from "@/lib/tasks/sourceReady";
 import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
 import TaskFolder from "@/models/TaskFolder";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
@@ -197,6 +198,8 @@ export async function createTaskAction(formData) {
     return fail("Could not number this task — please try again.");
   }
   await logActivity({ task: task._id, project: project._id, actor: viewer.id, type: "created", data: {} });
+  // Round 45: a Clip linked to a Production that is already done → รอตัดต่อ.
+  await applySourceReadyForClip(task);
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -279,6 +282,14 @@ export async function updateTaskAction(formData) {
   // save (so Cancel never loses a saved photo).
   if (extra.values) await deletePhotos(removedPhotoIds(task.details, extra.values.details));
 
+  // Round 45: a Clip edited to link ANOTHER Production that is already done →
+  // รอตัดต่อ (only when the link changed; the rule checks it is at รอ Source).
+  const linkBefore = String(task.details?.relatedProductionId ?? "");
+  const linkAfter = String(set.details?.relatedProductionId ?? "");
+  if (task.type === "clip" && extra.values && linkAfter && linkAfter !== linkBefore) {
+    await applySourceReadyForClip({ ...task, details: set.details });
+  }
+
   refresh();
   return { ok: true };
 }
@@ -334,6 +345,9 @@ export async function changeTaskStatusAction(formData) {
     type: "status_changed",
     data: { from: task.status, to: status, ...(move.kind === "override" ? { override: true } : {}) },
   });
+  // Round 45: a Production now เสร็จสมบูรณ์ → its linked Clips at รอ Source move
+  // to รอตัดต่อ (lib/tasks/sourceReady.js; legal arrows only, never backwards).
+  if (task.type === "production") await applySourceReady({ ...task, status });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -419,6 +433,8 @@ export async function duplicateTaskAction(formData) {
   }
   if (!copy) return fail("Could not number this task — please try again.");
   await logActivity({ task: copy._id, project: project._id, actor: viewer.id, type: "created", data: { duplicatedFrom: task.title } });
+  // Round 45: the copy keeps the Related Production link and starts at รอ Source.
+  await applySourceReadyForClip(copy);
 
   // Right after the original: (re)write the whole content's order.
   const ordered = sortByOrder(await siblingTasks(project, content)).map((t) => t._id.toString());

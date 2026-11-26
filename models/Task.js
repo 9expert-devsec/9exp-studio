@@ -37,8 +37,9 @@ const TaskSchema = new mongoose.Schema(
     // Type-specific fields, validated per type by lib/tasks/details.js (clip:
     // videoType, platforms, fileLocation, editingRequirements, referenceUrl,
     // related (ONE item, lib/tasks/related.js; legacy tasks may still hold
-    // relatedCourse / relatedProgram / relatedSkill until next saved), workLevel,
-    // contentReviewer, videoReviewer; graphic: platform, workType, items,
+    // relatedCourse / relatedProgram / relatedSkill until next saved),
+    // relatedProductionId (round 45: ONE Production task of the same project, or
+    // null — lib/tasks/clipFlow.js), workLevel, contentReviewer, videoReviewer; graphic: platform, workType, items,
     // fileLocation, photos[{ url, publicId, width, height }], brief, referenceUrl,
     // related, workLevel, contentReviewer, designReviewer; photo: photoType,
     // related, editor). Graphic File Location / Photo Folder Name + Location live

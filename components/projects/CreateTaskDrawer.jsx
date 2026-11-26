@@ -38,7 +38,8 @@ const TITLE_ID = "create-task-title";
 
 /** Step 2 forms available on the client, keyed by type (server decides via detailTypes). */
 const DETAIL_FORMS = {
-  clip: { Form: ClipDetailsStep, empty: emptyClipDetails },
+  // Create: Related Production pre-selected when the content has exactly one (round 45).
+  clip: { Form: ClipDetailsStep, empty: (drawer) => emptyClipDetails(drawer?.defaultRelatedProduction ?? "") },
   graphic: { Form: GraphicDetailsStep, empty: emptyGraphicDetails },
   post: { Form: PostDetailsStep, empty: emptyPostDetails },
   article: { Form: ArticleDetailsStep, empty: emptyArticleDetails },
@@ -68,25 +69,29 @@ export default function CreateTaskDrawer({ returnFocusId, drawer, ...rest }) {
   const editId = sp.get("editTask");
   const urlOpen =
     (sp.get("newTask") === "1" && drawer?.mode === "create") || (!!editId && drawer?.mode === "edit" && drawer.editing?.id === editId);
+  // `focus=relatedProduction` (round 45, Task Detail "เชื่อม"): open Edit on Step 2 at that field.
+  const focus = sp.get("focus") ?? "";
   const close = () => {
     const { pathname, search, hash } = window.location;
-    window.history.replaceState(null, "", `${pathname}${withSearchParams(search, { newTask: null, editTask: null })}${hash}`);
+    window.history.replaceState(null, "", `${pathname}${withSearchParams(search, { newTask: null, editTask: null, focus: null })}${hash}`);
   };
   return (
     <Drawer open={urlOpen && !!drawer} labelledBy={TITLE_ID} returnFocusId={returnFocusId} onClose={close}>
-      {drawer && <TaskForm key={drawer.editing?.id ?? "new"} drawer={drawer} {...rest} />}
+      {drawer && <TaskForm key={drawer.editing?.id ?? "new"} drawer={drawer} focus={focus} {...rest} />}
     </Drawer>
   );
 }
 
-function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes, drawer }) {
+function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes, drawer, focus }) {
   const requestClose = useDrawerClose();
   const editing = drawer.editing;
   const isEdit = !!editing;
-  const [step, setStep] = useState(1);
+  // Deep link to one Step 2 field (Task Detail → Related Production "เชื่อม").
+  const focusField = isEdit && editing.type === "clip" && focus === "relatedProduction" ? focus : "";
+  const [step, setStep] = useState(focusField ? 2 : 1);
   // Round 37: once Step 2 has been opened, its values are part of the save even
   // when the user goes Back and submits from Step 1 (they were silently dropped).
-  const [detailsOpened, setDetailsOpened] = useState(false);
+  const [detailsOpened, setDetailsOpened] = useState(!!focusField);
   const [title, setTitle] = useState(editing?.title ?? "");
   const [type, setType] = useState(editing?.type ?? "");
   const [details, setDetails] = useState(() =>
@@ -106,7 +111,7 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
   const goToDetails = () => {
     if (!detailForm) return;
     // Switching type resets Step 2 values (they belong to one type).
-    if (!details || details.__type !== type) setDetails({ ...detailForm.empty(), __type: type });
+    if (!details || details.__type !== type) setDetails({ ...detailForm.empty(drawer), __type: type });
     setDetailsOpened(true);
     setStep(2);
   };
@@ -217,6 +222,8 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
                 people={drawer.people[type]}
                 folders={drawer.folders?.[type] ?? []}
                 externals={drawer.externals ?? []}
+                productions={drawer.productions ?? []}
+                focusField={focusField}
               />
             )}
           </>

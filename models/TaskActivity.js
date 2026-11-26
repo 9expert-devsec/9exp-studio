@@ -6,7 +6,9 @@ const { ObjectId } = mongoose.Schema.Types;
 // server actions via lib/tasks/activity.js, after the main write (never breaks it).
 // Starts recording from round 33; older tasks have no back-filled history.
 //   created          { duplicatedFrom? }           — a new task (or a duplicate)
-//   status_changed   { from, to }                   — status keys
+//   status_changed   { from, to, auto? }            — status keys; `auto` (round 45):
+//                    { productionId, productionTitle } = a System move (Clip
+//                    source-ready, lib/tasks/sourceReady.js), actor null
 //   updated          { fields: [label] }            — Edit with changes
 //   assignee_changed { from, to }                   — user ids
 //   reviewer_changed { role, from, to }             — role label + user ids
@@ -28,7 +30,8 @@ const TaskActivitySchema = new mongoose.Schema(
   {
     task: { type: ObjectId, ref: "Task", required: true },
     project: { type: ObjectId, ref: "Project", required: true },
-    actor: { type: ObjectId, ref: "User", required: true },
+    // null = System (round 45: automatic moves); a user id otherwise.
+    actor: { type: ObjectId, ref: "User", default: null },
     type: { type: String, enum: ACTIVITY_TYPES, required: true },
     data: { type: mongoose.Schema.Types.Mixed, default: {} },
   },

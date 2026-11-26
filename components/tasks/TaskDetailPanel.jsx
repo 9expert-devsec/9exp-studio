@@ -12,8 +12,12 @@
 //
 // Left column: type + ID chips, title, description, the info rows that apply to
 // the task's type. Right column: Status & Progress (stepper, current status with
-// an inline change, Post asset status, progress) and the tabs — Activity is live;
-// Comments / Reviews / Files / Related Tasks are "Coming soon".
+// an inline change, Post asset status, progress) and the tabs — Activity · Work
+// Plan · Reviews (round 45: Activity is live; the other two say "เร็ว ๆ นี้" until
+// rounds 47 / 46).
+// Clip (round 45, Figma 341:*): its own left column (ClipInfoColumn, with the
+// Related Production card) and, under the 5-step stepper, the Current Status
+// card with ONE primary action (lib/tasks/clipFlow.js clipPrimaryAction).
 // Each column scrolls on its own (≥ lg); below that the body scrolls as one.
 
 import { useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
@@ -26,7 +30,10 @@ import {
   CalendarClock,
   CalendarDays,
   Check,
+  CircleCheck,
+  Clapperboard,
   Clock,
+  Hourglass,
   Copy,
   ExternalLink,
   Eye,
@@ -41,19 +48,23 @@ import {
   Link2,
   ListChecks,
   Loader2,
+  Lock,
   Mic,
   MonitorSmartphone,
+  PauseCircle,
   Pencil,
   PlayCircle,
   Plus,
   RefreshCw,
   Shapes,
+  TriangleAlert,
   UserCheck,
   UserRound,
   Video,
   X,
+  XCircle,
 } from "lucide-react";
-import { loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
+import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } from "@/app/(app)/projects/task-actions";
 import StatusMoveForm from "@/components/tasks/StatusMoveForm";
 import Modal from "@/components/ui/Modal";
 import {
@@ -399,10 +410,11 @@ function Description({ text }) {
   );
 }
 
-function InfoColumn({ panel }) {
+/** Type + ID chips, title, description (shared by every left column). */
+function InfoHead({ panel }) {
   const TypeIcon = getTaskType(panel.type)?.icon ?? ListChecks;
   return (
-    <section aria-label="Task information" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+    <>
       <div className="flex flex-wrap items-center gap-2">
         <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-3 py-1 text-xs font-semibold text-accent-fg">
           <TypeIcon className="size-3.5" aria-hidden="true" />
@@ -414,6 +426,32 @@ function InfoColumn({ panel }) {
       </div>
       <h3 className="mt-3 break-words text-2xl font-bold leading-tight text-fg">{panel.title}</h3>
       {panel.description && <Description text={panel.description} />}
+    </>
+  );
+}
+
+/** The Related item (course / program / skill). MSDB has no public page URL yet, so no open icon. */
+function RelatedBlock({ related }) {
+  return (
+    <div className="mt-2 border-t border-line-subtle pt-4">
+      <p className="flex items-center gap-2.5 text-sm font-semibold text-fg">
+        <Link2 className="size-4 text-fg-muted" aria-hidden="true" />
+        Related
+      </p>
+      <div className="mt-2 flex min-w-0 items-center gap-2 rounded-[12px] bg-card-inset px-3 py-2">
+        <MsdbIcon url={related.iconUrl} code={related.code} name={related.name} />
+        <RelatedBadge kind={related.kind} isInhouse={related.isInhouse} />
+        <span className="min-w-0 truncate text-sm text-fg">{related.name}</span>
+      </div>
+    </div>
+  );
+}
+
+function InfoColumn({ panel }) {
+  if (panel.clip) return <ClipInfoColumn panel={panel} />;
+  return (
+    <section aria-label="Task information" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+      <InfoHead panel={panel} />
 
       <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
         <Row icon={FolderKanban} label="Project">
@@ -469,19 +507,7 @@ function InfoColumn({ panel }) {
         )}
       </dl>
 
-      {panel.related && (
-        <div className="mt-2 border-t border-line-subtle pt-4">
-          <p className="flex items-center gap-2.5 text-sm font-semibold text-fg">
-            <Link2 className="size-4 text-fg-muted" aria-hidden="true" />
-            Related
-          </p>
-          <div className="mt-2 flex min-w-0 items-center gap-2 rounded-[12px] bg-card-inset px-3 py-2">
-            <MsdbIcon url={panel.related.iconUrl} code={panel.related.code} name={panel.related.name} />
-            <RelatedBadge kind={panel.related.kind} isInhouse={panel.related.isInhouse} />
-            <span className="min-w-0 truncate text-sm text-fg">{panel.related.name}</span>
-          </div>
-        </div>
-      )}
+      {panel.related && <RelatedBlock related={panel.related} />}
 
       {panel.relatedAssets && (
         <div className="mt-4 border-t border-line-subtle pt-4">
@@ -604,20 +630,174 @@ function InfoColumn({ panel }) {
   );
 }
 
+/** Platforms: the first one (brand icon + name), the rest as "+N". */
+function PlatformsValue({ platforms }) {
+  const [first, ...rest] = platforms;
+  const others = rest.map((p) => p.label).join(", ");
+  return (
+    <span className="flex min-w-0 items-center gap-2">
+      <PlatformIcon icon={first.icon} />
+      <span className="truncate">{first.label}</span>
+      {rest.length > 0 && (
+        <span title={others} className="shrink-0 rounded-full bg-track px-2 py-0.5 text-xs font-semibold text-fg-muted">
+          +{rest.length}
+          <span className="sr-only"> more: {others}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** One Related Production row: tile · title · status, Due, first videographer +N. */
+function ProductionRow({ rp }) {
+  return (
+    <>
+      <span aria-hidden="true" className="flex size-10 shrink-0 items-center justify-center rounded-[10px] bg-card-inset text-fg-muted">
+        <Clapperboard className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-sm font-semibold text-fg">{rp.title}</span>
+        <span className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
+          <StatusChip status={rp.group} label={rp.statusLabel} />
+          {rp.dueLabel && (
+            <span className="flex items-center gap-1">
+              <CalendarClock className="size-3.5" aria-hidden="true" />
+              Due {rp.dueLabel}
+            </span>
+          )}
+          {rp.videographer && (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <Avatar name={rp.videographer.name} url={rp.videographer.avatarUrl} size={20} />
+              <span className="truncate">{rp.videographer.name}</span>
+              {rp.extraVideographers > 0 && <span className="font-semibold">+{rp.extraVideographers}</span>}
+            </span>
+          )}
+        </span>
+      </span>
+    </>
+  );
+}
+
+/** Clip: the linked Production (live), or "ไม่ได้เชื่อม Production" + "เชื่อม" for editors. */
+function RelatedProductionBlock({ clip }) {
+  const rp = clip.relatedProduction;
+  const box = "mt-2 flex items-center gap-3 rounded-[12px] border border-line px-3 py-2";
+  return (
+    <div className="mt-4 border-t border-line-subtle pt-4">
+      <p className="flex items-center gap-2.5 text-sm font-semibold text-fg">
+        <Clapperboard className="size-4 text-fg-muted" aria-hidden="true" />
+        Related Production
+      </p>
+      {!rp ? (
+        <div className="mt-2 flex items-center justify-between gap-3 rounded-[12px] border border-dashed border-line px-3 py-2.5 text-sm">
+          <span className="text-fg-muted">ไม่ได้เชื่อม Production</span>
+          {clip.linkProductionHref && (
+            <Link
+              href={clip.linkProductionHref}
+              scroll={false}
+              className="shrink-0 rounded font-semibold text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500"
+            >
+              เชื่อม
+            </Link>
+          )}
+        </div>
+      ) : rp.canOpen ? (
+        // Swaps this panel to the Production in place (replace: Back still closes).
+        <TaskOpenLink
+          taskId={rp.id}
+          href={assetHref(rp.id)}
+          replace
+          className={`${box} transition-colors hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-brand-500`}
+          aria-label={`Open Production: ${rp.title}`}
+        >
+          <ProductionRow rp={rp} />
+          <ExternalLink className="size-4 shrink-0 text-fg-muted" aria-hidden="true" />
+        </TaskOpenLink>
+      ) : (
+        <div className={box}>
+          <ProductionRow rp={rp} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+const dash = <span className="text-fg-muted">—</span>;
+
+/** Clip left column (Figma 341:*, round 45). */
+function ClipInfoColumn({ panel }) {
+  const { clip } = panel;
+  return (
+    <section aria-label="Task information" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+      <InfoHead panel={panel} />
+
+      <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
+        <Row icon={FolderKanban} label="Project">
+          <MaybeLink href={panel.project.href}>{panel.project.name}</MaybeLink>
+        </Row>
+        <Row icon={FileText} label="Content">
+          <MaybeLink href={panel.content.href}>{panel.content.name}</MaybeLink>
+        </Row>
+        <Row icon={MonitorSmartphone} label="Platform">
+          {panel.platforms.length ? <PlatformsValue platforms={panel.platforms} /> : dash}
+        </Row>
+        <Row icon={PlayCircle} label="Video Type">
+          {panel.videoType ?? dash}
+        </Row>
+      </dl>
+
+      {panel.related && <RelatedBlock related={panel.related} />}
+      <RelatedProductionBlock clip={clip} />
+
+      <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
+        <Row icon={UserRound} label="Assignee">
+          <PersonValue person={panel.assignee.person} />
+        </Row>
+        {panel.reviewers.map((r) => (
+          <Row key={r.title} icon={UserCheck} label={r.title}>
+            <PersonValue person={r.person} />
+          </Row>
+        ))}
+        <Row icon={BarChart3} label="Work Level">
+          {panel.workLevelLabel ?? dash}
+        </Row>
+        <Row icon={CalendarDays} label="Start">
+          {panel.start.label ?? dash}
+        </Row>
+        <Row icon={CalendarClock} label="Due">
+          {panel.due.label ?? dash}
+        </Row>
+        <Row icon={Clock} label="Created">
+          {panel.created.atLabel}
+          {panel.created.by && <span className="text-fg-muted"> · by {panel.created.by}</span>}
+        </Row>
+        <Row icon={RefreshCw} label="Last Updated">
+          {panel.updated.atLabel}
+          {panel.updated.by && <span className="text-fg-muted"> · by {panel.updated.by}</span>}
+        </Row>
+      </dl>
+    </section>
+  );
+}
+
 // ── Right column ──────────────────────────────────────────────────────────
 
 const STEP_DOT = {
   complete: "border-success bg-success text-white",
   current: "border-brand-500 bg-brand-500 text-navy ring-4 ring-brand-500/20",
+  // Round 45: Clip แก้ไข sits on "ตรวจงาน" with a warning (frame 341:2231).
+  warning: "border-warning bg-warning/15 text-warning ring-4 ring-warning/15",
   upcoming: "border-line bg-card text-fg-muted",
   muted: "border-line bg-track text-fg-muted",
 };
 const STEP_LABEL = {
   complete: "text-fg",
   current: "rounded-full bg-accent-soft px-2 py-0.5 font-semibold text-accent-fg",
+  warning: "font-semibold text-warning",
   upcoming: "text-fg-muted",
   muted: "text-fg-muted",
 };
+const STEP_SR = { complete: " (done)", current: " (current)", warning: " (current, needs changes)" };
 
 function Stepper({ stepper }) {
   return (
@@ -628,17 +808,22 @@ function Stepper({ stepper }) {
             {i > 0 && (
               <span
                 aria-hidden="true"
-                className={`absolute right-1/2 top-4 h-0.5 w-full -translate-y-1/2 ${s.state === "complete" || s.state === "current" ? "bg-success" : "bg-line"}`}
+                className={`absolute right-1/2 top-4 h-0.5 w-full -translate-y-1/2 ${s.state === "complete" || s.state === "current" || s.state === "warning" ? "bg-success" : "bg-line"}`}
               />
             )}
             <span className={`relative z-[1] flex size-8 items-center justify-center rounded-full border-2 text-xs font-bold ${STEP_DOT[s.state]}`}>
-              {s.state === "complete" ? <Check className="size-4" aria-hidden="true" /> : i + 1}
+              {s.state === "complete" ? (
+                <Check className="size-4" aria-hidden="true" />
+              ) : s.state === "warning" ? (
+                <TriangleAlert className="size-4" aria-hidden="true" />
+              ) : (
+                i + 1
+              )}
             </span>
             <span className={`text-xs ${STEP_LABEL[s.state]}`}>
               {s.label}
-              <span className="sr-only">
-                {s.state === "complete" ? " (done)" : s.state === "current" ? " (current)" : ""}
-              </span>
+              <span className="sr-only">{STEP_SR[s.state] ?? ""}</span>
+              {s.note && <span className="block text-[11px] font-medium">{s.note}</span>}
             </span>
           </li>
         ))}
@@ -699,6 +884,9 @@ function StatusColumn({ panel }) {
         <div className="mt-4">
           <Stepper stepper={stepper} />
         </div>
+        {panel.clip ? (
+          <ClipStatusCard panel={panel} />
+        ) : (
         <div className={`mt-4 grid gap-3 ${showAsset ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           <StatusTile panel={panel} />
           {showAsset && (
@@ -730,41 +918,158 @@ function StatusColumn({ panel }) {
             )}
           </div>
         </div>
+        )}
       </section>
 
       <section aria-label="Task tabs" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
-        <div role="tablist" aria-label="Task sections" className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1">
-          <button
-            type="button"
-            role="tab"
-            aria-selected="true"
-            id="task-tab-activity"
-            aria-controls="task-panel-activity"
-            className="-mb-px min-h-10 shrink-0 border-b-2 border-brand-500 px-3 text-sm font-semibold text-accent-fg"
-          >
-            Activity
-          </button>
-          {["Comments", "Reviews", "Files", "Related Tasks"].map((t) => (
-            <span key={t} title="Coming soon" className="shrink-0">
-              <button
-                type="button"
-                role="tab"
-                aria-selected="false"
-                aria-disabled="true"
-                disabled
-                className="min-h-10 cursor-not-allowed px-3 text-sm text-fg-muted opacity-60"
-              >
-                {t}
-                <span className="sr-only"> (coming soon)</span>
-              </button>
-            </span>
-          ))}
-        </div>
-        <div id="task-panel-activity" role="tabpanel" aria-labelledby="task-tab-activity" className="pt-4">
-          <ActivityTimeline key={`${panel.id}:${panel.activity.entries[0]?.id ?? "none"}`} taskId={panel.id} initial={panel.activity} />
-        </div>
+        <TaskTabs panel={panel} />
       </section>
     </div>
+  );
+}
+
+// ── Clip: Current Status + primary action (round 45) ───────────────────────
+
+const STATUS_ICON = {
+  revising: { Icon: TriangleAlert, tone: "bg-warning/15 text-warning" },
+  done: { Icon: CircleCheck, tone: "bg-success/15 text-success" },
+  paused: { Icon: PauseCircle, tone: "bg-warning/15 text-warning" },
+  cancelled: { Icon: XCircle, tone: "bg-danger/10 text-danger" },
+};
+const DEFAULT_STATUS_ICON = { Icon: Hourglass, tone: "bg-accent-soft text-accent-fg" };
+
+/** "ตั้งแต่ <when> · โดย <who>", or "อัตโนมัติจาก Production "…" · <when>" (latest status change). */
+function statusContextLine(c) {
+  if (!c) return "";
+  if (c.autoFrom != null) return `อัตโนมัติจาก Production "${c.autoFrom}" · ${c.atLabel}`;
+  return `ตั้งแต่ ${c.atLabel}${c.by ? ` · โดย ${c.by}` : ""}`;
+}
+
+/** The ONE primary button: a plain status move (changeTaskStatusAction → canTransition) or Copy File Location. */
+function PrimaryActionButton({ panel, button }) {
+  const [pending, startTransition] = useTransition();
+  if (button.kind === "copy") {
+    const copy = async () => {
+      try {
+        await navigator.clipboard.writeText(button.value);
+        toast("คัดลอกแล้ว");
+      } catch {
+        toast("Couldn't copy — select the path and copy it by hand.", { tone: "error" });
+      }
+    };
+    return (
+      <button type="button" onClick={copy} className={buttonClass("secondary", "w-full")}>
+        <Copy className="size-4" aria-hidden="true" />
+        {button.label}
+      </button>
+    );
+  }
+  const move = () => {
+    const fd = new FormData();
+    fd.set("projectId", panel.projectId);
+    fd.set("contentId", panel.contentId);
+    fd.set("taskId", panel.id);
+    fd.set("status", button.to);
+    startTransition(async () => {
+      const res = await changeTaskStatusAction(fd);
+      if (res?.ok) {
+        invalidateTaskPanel(); // the open panel refetches
+        toast("Status updated");
+      } else toast(res?.error ?? "Something went wrong.", { tone: "error" });
+    });
+  };
+  return (
+    <button type="button" onClick={move} disabled={pending} className={buttonClass("primary", "w-full")}>
+      {pending && <Loader2 className="size-4 animate-spin" aria-hidden="true" />}
+      {button.label}
+    </button>
+  );
+}
+
+function ClipStatusCard({ panel }) {
+  const { clip } = panel;
+  const action = clip.primaryAction;
+  const { Icon, tone } = STATUS_ICON[panel.status] ?? DEFAULT_STATUS_ICON;
+  const isCopy = action?.button?.kind === "copy";
+  return (
+    <div className={`mt-4 grid gap-3 ${action ? "sm:grid-cols-2" : ""}`}>
+      <div className="flex gap-3 rounded-[14px] bg-card-inset p-3.5">
+        <span aria-hidden="true" className={`flex size-10 shrink-0 items-center justify-center rounded-full ${tone}`}>
+          <Icon className="size-5" />
+        </span>
+        <div className="min-w-0">
+          <p className="flex items-center gap-1 text-xs text-fg-muted">
+            Current Status
+            <Lock className="size-3" aria-hidden="true" />
+            <span className="sr-only">(changes through the actions)</span>
+          </p>
+          <p className="mt-0.5 text-lg font-bold leading-snug text-fg">{panel.statusLabel}</p>
+          <p className="mt-0.5 break-words text-xs text-fg-muted">{statusContextLine(clip.statusContext)}</p>
+        </div>
+      </div>
+      {action && (
+        <div className="flex min-w-0 flex-col justify-center gap-2 rounded-[14px] border border-line p-3.5">
+          {action.button && <PrimaryActionButton panel={panel} button={action.button} />}
+          <p title={isCopy ? action.helper : undefined} className={`text-xs text-fg-muted ${isCopy ? "truncate font-mono" : ""}`}>
+            {action.helper}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Tabs (round 45: Activity · Work Plan · Reviews, the same for every type) ──
+
+const TABS = [
+  { key: "activity", label: "Activity" },
+  { key: "work_plan", label: "Work Plan" }, // round 47
+  { key: "reviews", label: "Reviews" }, // round 46
+];
+
+function TaskTabs({ panel }) {
+  const [tab, setTab] = useState("activity");
+  const onKeyDown = (e) => {
+    const i = TABS.findIndex((t) => t.key === tab);
+    const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 }[e.key];
+    if (next == null) return;
+    e.preventDefault();
+    const t = TABS[(next + TABS.length) % TABS.length];
+    setTab(t.key);
+    document.getElementById(`task-tab-${t.key}`)?.focus();
+  };
+  return (
+    <>
+      <div role="tablist" aria-label="Task sections" onKeyDown={onKeyDown} className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1">
+        {TABS.map((t) => {
+          const selected = t.key === tab;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              role="tab"
+              id={`task-tab-${t.key}`}
+              aria-selected={selected}
+              aria-controls={`task-panel-${t.key}`}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setTab(t.key)}
+              className={`-mb-px min-h-10 shrink-0 border-b-2 px-3 text-sm focus-visible:outline-2 focus-visible:outline-brand-500 ${
+                selected ? "border-brand-500 font-semibold text-accent-fg" : "border-transparent text-fg-muted hover:text-fg"
+              }`}
+            >
+              {t.label}
+            </button>
+          );
+        })}
+      </div>
+      <div id={`task-panel-${tab}`} role="tabpanel" aria-labelledby={`task-tab-${tab}`} className="pt-4">
+        {tab === "activity" ? (
+          <ActivityTimeline key={`${panel.id}:${panel.activity.entries[0]?.id ?? "none"}`} taskId={panel.id} initial={panel.activity} />
+        ) : (
+          <p className="rounded-[12px] bg-card-inset py-10 text-center text-sm text-fg-muted">เร็ว ๆ นี้</p>
+        )}
+      </div>
+    </>
   );
 }
 

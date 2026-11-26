@@ -3,15 +3,18 @@
 // Create / Edit Task — Step 2 "Task Detail" for Clip (Figma node 126:2318).
 // Controlled by the drawer (values + setField), so Back → Step 1 → Add details
 // keeps everything. Sections: Video Overview · Brief & References · Related ·
-// Work & Assign · Reviewer Assign · Timeline. Candidate lists (assignee,
+// Related Production (round 45) · Work & Assign · Reviewer Assign · Timeline.
+// Candidate lists (assignee,
 // reviewers) and option lists come from the server; the save re-validates all of
 // it (lib/tasks/details.js).
 
+import { useEffect } from "react";
 import { PlayCircle } from "lucide-react";
 import Combobox from "@/components/ui/Combobox";
 import { DateTimeField, Field, ReferenceField, Section } from "@/components/tasks/DetailBlocks";
 import PersonPicker from "@/components/tasks/PersonPicker";
 import RelatedPicker from "@/components/tasks/RelatedPicker";
+import RelatedProductionPicker from "@/components/tasks/RelatedProductionPicker";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
 import { WORK_LEVELS } from "@/lib/tasks/types";
@@ -20,13 +23,14 @@ import PlatformIcon from "./PlatformIcon";
 const FILE_LOCATION_MAX = 1000;
 
 /** Empty Step 2 values (also the shape posted as `details` JSON). */
-export const emptyClipDetails = () => ({
+export const emptyClipDetails = (relatedProduction = "") => ({
   videoType: "",
   platforms: [],
   fileLocation: "",
   editingRequirements: "",
   referenceUrl: "",
   related: null, // ONE item: { kind, refId, code, name, iconUrl, isInhouse } (lib/tasks/related.js)
+  relatedProduction, // a Production task id of this project, or "" (round 45)
   workLevel: "",
   assignee: "",
   contentReviewer: "",
@@ -43,7 +47,14 @@ export const emptyClipDetails = () => ({
  *           options: { video_type: object[], platform: object[] },
  *           people: { assignee: object[], contentReviewer: object[], videoReviewer: object[] } }} props
  */
-export default function ClipDetailsStep({ values, setField, errors, projectId, options, people }) {
+export default function ClipDetailsStep({ values, setField, errors, projectId, options, people, productions = [], focusField = "" }) {
+  // Opened from Task Detail "เชื่อม": bring the Related Production field into view.
+  useEffect(() => {
+    if (focusField !== "relatedProduction") return;
+    document.getElementById("sec-related-production")?.scrollIntoView({ block: "start" });
+    document.getElementById("clip-related-production")?.focus({ preventScroll: true });
+  }, [focusField]);
+
   const videoTypes = options.video_type ?? [];
   const platforms = options.platform ?? [];
   const activeVideoTypes = videoTypes.filter((o) => o.active);
@@ -140,6 +151,23 @@ export default function ClipDetailsStep({ values, setField, errors, projectId, o
           error={err("related")}
           legacyNote={!!values.relatedHadMultiple}
         />
+      </Section>
+
+      <Section id="sec-related-production" title="Related Production" subtitle="The shoot this clip is edited from.">
+        <Field
+          id="clip-related-production"
+          title="Production task"
+          error={err("relatedProduction")}
+          hint="When it's marked เสร็จสมบูรณ์, this clip moves from รอ Source to รอตัดต่อ automatically."
+        >
+          <RelatedProductionPicker
+            id="clip-related-production"
+            productions={productions}
+            value={values.relatedProduction ?? ""}
+            onChange={(v) => setField("relatedProduction", v)}
+            error={err("relatedProduction")}
+          />
+        </Field>
       </Section>
 
       <Section id="sec-work" title="Work & Assign" subtitle="Set the difficulty and who does the work.">
