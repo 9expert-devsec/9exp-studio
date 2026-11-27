@@ -91,7 +91,8 @@ export default function AllTasksToolbar({ projects, people }) {
         )}
       </button>
 
-      <GroupMenu value={f.group} onPick={(group) => go({ group })} />
+      {/* Round 57: no grouping in the calendar (the param stays for the way back). */}
+      {f.view !== "calendar" && <GroupMenu value={f.group} onPick={(group) => go({ group })} />}
 
       <AllTasksFilterModal
         open={filterOpen}

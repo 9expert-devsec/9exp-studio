@@ -5,12 +5,17 @@
 // Data comes shaped from lib/tasks/allTasks.js; the only local state is which
 // group sections are collapsed (pure UI, not URL-derived).
 //
+// Round 57: the card fills the page body and scrolls INSIDE itself (SCROLLER);
+// the column header is sticky (opaque, bottom line), group headers scroll, the
+// footer is pinned under the scroll area. Any change of page / tab / filter /
+// search / grouping / sort scrolls the body back to the top.
+//
 // A row opens the Task Detail panel on THIS page (TaskOpenLink → ?task=<id>, every
 // other param kept); the whole row is the link's hit area (stretched link).
 // Grouping hides what the group header already says: project → no project name
 // in line 2, type → no type badge, assignee → empty ผู้รับผิดชอบ cell.
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, SearchX } from "lucide-react";
 import TaskOpenLink from "@/components/tasks/TaskOpenLink";
@@ -21,9 +26,9 @@ import { cardClass } from "@/components/ui/Card";
 import Pagination from "@/components/ui/Pagination";
 import { ALL_TASKS_PATH, EMPTY_MODAL_FILTERS, allTasksQuery, hasNarrowing } from "@/lib/tasks/allTasksFilters";
 import { STOPPED_STAGE, TASK_STAGES, taskTypeTone } from "@/lib/tasks/types";
-import { COL, ROW_SKELETON_H, TABLE_HEAD } from "./allTasksStyles";
+import { CARD_FILL, COL, ROW_SKELETON_H, SCROLLER, STICKY_HEAD, TABLE_HEAD } from "./allTasksStyles";
 
-const th = "px-4 text-left text-xs font-semibold text-fg-muted";
+const th = `${STICKY_HEAD} px-4 text-left text-xs font-semibold text-fg-muted`;
 const td = "px-4 py-3 align-middle";
 const stageOf = (key) => TASK_STAGES.find((s) => s.key === key) ?? STOPPED_STAGE;
 
@@ -188,6 +193,12 @@ function GroupHeader({ g, collapsed, onToggle }) {
 /** @param {{ f: object, data: object }} props */
 export default function AllTasksTable({ f, data }) {
   const [collapsed, setCollapsed] = useState(() => new Set());
+  // Back to the top whenever the list itself changes (not when ?task= opens the panel).
+  const scrollRef = useRef(null);
+  const listKey = allTasksQuery(f, {}, { keepPage: true });
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: 0 });
+  }, [listKey]);
   const toggle = (key) =>
     setCollapsed((cur) => {
       const next = new Set(cur);
@@ -218,16 +229,16 @@ export default function AllTasksTable({ f, data }) {
   const range = `${data.from}–${data.to} จาก ${data.total} งาน`;
 
   return (
-    <div className={`${cardClass({ size: "sm", padded: false })} overflow-hidden`}>
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[820px] table-fixed">
+    <div className={`${cardClass({ size: "sm", padded: false })} ${CARD_FILL}`}>
+      <div ref={scrollRef} className={SCROLLER}>
+        <table className="w-full min-w-[820px] table-fixed border-separate border-spacing-0">
           <colgroup>
             <col />
             <col className={COL.status} />
             <col className={COL.person} />
             <col className={COL.due} />
           </colgroup>
-          <thead className="border-b border-line">
+          <thead>
             <tr className={TABLE_HEAD}>
               <SortHeader f={f} field="task" label="Task" />
               <th scope="col" className={th}>สถานะ</th>
@@ -236,14 +247,14 @@ export default function AllTasksTable({ f, data }) {
             </tr>
           </thead>
           {sections.map((g) => (
-            <tbody key={g.key || "all"} className="divide-y divide-line-subtle border-b border-line-subtle last:border-0">
+            <tbody key={g.key || "all"} className="[&_td]:border-b [&_td]:border-line-subtle">
               {f.group && <GroupHeader g={g} collapsed={collapsed.has(g.key)} onToggle={() => toggle(g.key)} />}
               {!collapsed.has(g.key) && g.rows.map((r) => <Row key={r.id} row={r} group={f.group} />)}
             </tbody>
           ))}
         </table>
       </div>
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-line px-4 py-3">
         <p className="text-sm text-fg-muted">
           {f.group ? `แสดง ${data.groups.length} กลุ่ม · ${range}` : `แสดง ${range}`}
         </p>

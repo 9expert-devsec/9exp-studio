@@ -1,11 +1,12 @@
 import { Suspense } from "react";
 import { redirect } from "next/navigation";
-import { AllTasksSkeleton, AllTasksView, ViewToggle } from "@/components/tasks/AllTasksView";
+import { AllTasksSkeleton, AllTasksView } from "@/components/tasks/AllTasksView";
+import AllTasksViewToggle, { ViewToggleFallback } from "@/components/tasks/AllTasksViewToggle";
 import TaskDetailPanel from "@/components/tasks/TaskDetailPanel";
 import PinnedShellGuard from "@/components/shell/PinnedShellGuard";
 import PageHeader from "@/components/ui/PageHeader";
 import { getProjectViewer } from "@/lib/projects/access";
-import { loadAllTasks } from "@/lib/tasks/allTasks";
+import { loadAllTasks, loadAllTasksCalendar } from "@/lib/tasks/allTasks";
 import { parseAllTasks } from "@/lib/tasks/allTasksFilters";
 
 export const metadata = {
@@ -13,11 +14,12 @@ export const metadata = {
 };
 
 // All Tasks (round 56, Figma 386:1241 and the grouped frames): every task the
-// viewer may see (lib/tasks/allTasks.js), table view. All state lives in the URL
+// viewer may see (lib/tasks/allTasks.js), as a table or (round 57, ?view=calendar)
+// a month / week calendar. All state lives in the URL
 // (lib/tasks/allTasksFilters.js); filtering, sorting and paging are server-side.
 //
 // Pinned shell (round 52 pattern): header + tabs + toolbar never scroll; the table
-// scrolls inside the in-app container. The ONE boundary below suspends only on the
+// / calendar card fills the rest and scrolls inside itself (round 57). The ONE boundary below suspends only on the
 // first visit; later URL changes keep the current page on screen until the new one
 // is ready (router transitions), so nothing above the table ever jumps. Its
 // fallback (AllTasksSkeleton) has the same rows at the same heights.
@@ -30,7 +32,14 @@ export default function AllTasksPage({ searchParams }) {
     <div data-pinned-shell data-pinned-root className="mx-auto flex w-full max-w-7xl flex-col gap-5 lg:min-h-0 lg:flex-1">
       <PinnedShellGuard />
       <div className="shrink-0">
-        <PageHeader title="All Tasks" actions={<ViewToggle />}>
+        <PageHeader
+          title="All Tasks"
+          actions={
+            <Suspense fallback={<ViewToggleFallback />}>
+              <AllTasksViewToggle />
+            </Suspense>
+          }
+        >
           <p className="-mt-1 text-sm text-fg-muted">ภาพรวมงานทุกประเภทจากทุกโปรเจกต์</p>
         </PageHeader>
       </div>
@@ -48,6 +57,6 @@ async function AllTasksData({ searchParams }) {
   const viewer = await getProjectViewer();
   if (!viewer) redirect("/login");
   const f = parseAllTasks(await searchParams);
-  const data = await loadAllTasks(viewer, f);
+  const data = f.view === "calendar" ? await loadAllTasksCalendar(viewer, f) : await loadAllTasks(viewer, f);
   return <AllTasksView f={f} data={data} />;
 }
