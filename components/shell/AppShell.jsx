@@ -61,7 +61,10 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
   }, [open]);
 
   return (
-    <div className="flex min-h-dvh flex-1 bg-page text-fg dark:[color-scheme:dark] lg:has-[[data-pinned-shell]]:h-dvh lg:has-[[data-pinned-shell]]:overflow-hidden">
+    // Round 54: max-h-dvh caps the pinned shell. It is a flex-1 item (basis 0) of the
+    // auto-height <body class="flex flex-col">, so h-dvh alone lost to the flex
+    // basis and the shell grew to its content (window scrolled, #project-scroll didn't).
+    <div className="flex min-h-dvh flex-1 bg-page text-fg dark:[color-scheme:dark] lg:has-[[data-pinned-shell]]:h-dvh lg:has-[[data-pinned-shell]]:max-h-dvh lg:has-[[data-pinned-shell]]:overflow-hidden">
       {/* Close the drawer on any route change (link, back/forward). */}
       <Suspense fallback={null}>
         <RouteChangeEffect onRouteChange={close} />
