@@ -9,16 +9,28 @@
 // Log time / + Add plan / Edit; everyone else reads.
 // Hours-only entries: a plan draws as a dashed outline across the whole Plan
 // lane; a log as a semi-transparent orange stub at the LEFT of the Actual lane,
-// its width to scale.
+// its width to scale. Blocks are at least MIN_BLOCK_PX wide (left edge = true
+// time); expanded-row labels never overlap (layoutLaneLabels, round 47.1).
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CalendarRange, ChevronDown, ChevronRight, Clock, Plus } from "lucide-react";
 import { LogDialog, PlanDialog } from "@/components/tasks/WorkPlanDialogs";
 import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
 import { input, label } from "@/components/projects/ProjectForm";
 import { formatThaiDay } from "@/lib/projects/format";
-import { DAY_MIN, buildRows, defaultRange, entryLabel, formatDuration, formatOver, summaryCards, toMin } from "@/lib/tasks/workplan";
+import {
+  DAY_MIN,
+  MIN_BLOCK_PX,
+  buildRows,
+  defaultRange,
+  entryLabel,
+  formatDuration,
+  formatOver,
+  layoutLaneLabels,
+  summaryCards,
+  toMin,
+} from "@/lib/tasks/workplan";
 
 const LABEL_TONE = {
   today: "text-accent-fg",
@@ -126,7 +138,16 @@ export default function WorkPlanTab({ panel }) {
           )}
         </div>
       ) : (
-        <DayTable rows={rows} today={wp.today} canWrite={canWrite} onLog={openLog} onEditPlan={openPlan} onEditLog={(e) => openLog(e.date, e)} />
+        <DayTable
+          rows={rows}
+          today={wp.today}
+          // Round 47.1: a range across calendar years shows the year on every row date.
+          withYear={from.slice(0, 4) !== to.slice(0, 4)}
+          canWrite={canWrite}
+          onLog={openLog}
+          onEditPlan={openPlan}
+          onEditLog={(e) => openLog(e.date, e)}
+        />
       )}
 
       {dialog?.kind === "plan" && (
@@ -176,32 +197,63 @@ function RangePicker({ from, to, onChange, onReset }) {
 
 // ── Bars ──────────────────────────────────────────────────────────────────
 
-/** One lane of blocks (Plan = lavender, Actual = orange). `labels`: range text under each block. */
+/** Block left + width: true start time; at least MIN_BLOCK_PX wide so a short block never shrinks to a dot. */
+const blockStyle = (startMin, minutes) => ({ left: pct(startMin), width: `max(${MIN_BLOCK_PX}px, ${pct(minutes)})` });
+
+/** The element's width in px (ResizeObserver); 0 until measured. */
+function useWidth(ref, active) {
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!active || !el) return;
+    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [ref, active]);
+  return width;
+}
+
+const LINE_PX = 14;
+
+/**
+ * One lane of blocks (Plan = lavender, Actual = orange). `labels` (expanded row):
+ * range labels under the blocks, laid out by lib/tasks/workplan.js
+ * layoutLaneLabels — left to right, a second line when they'd overlap, hidden
+ * when neither line has room (the block's tooltip still shows the range).
+ */
 function Lane({ entries, kind, thin, labels = false }) {
   const fill = kind === "plan" ? "bg-plan" : "bg-brand-500";
   const h = thin ? "h-1.5" : "h-4";
+  const ref = useRef(null);
+  const width = useWidth(ref, labels);
+  const placed = labels && width ? layoutLaneLabels(entries, width) : [];
+  const lines = placed.reduce((n, l) => (l.line == null ? n : Math.max(n, l.line + 1)), 0);
   return (
-    <div className={`relative ${labels ? "pb-5" : ""}`}>
+    <div ref={ref} className="relative">
       <div className={`relative ${h}`}>
         {entries.map((e) => {
           if (e.mode === "hours") {
             return kind === "plan" ? (
-              <span key={e.id} className={`absolute inset-y-0 left-0 right-0 rounded-full border border-dashed border-plan`} title={entryLabel(e)} />
+              <span key={e.id} className="absolute inset-y-0 left-0 right-0 rounded-[4px] border border-dashed border-plan" title={entryLabel(e)} />
             ) : (
-              <span key={e.id} className={`absolute inset-y-0 left-0 rounded-full ${fill} opacity-50`} style={{ width: pct(e.minutes) }} title={entryLabel(e)} />
+              <span key={e.id} className={`absolute inset-y-0 rounded-[4px] ${fill} opacity-50`} style={blockStyle(0, e.minutes)} title={entryLabel(e)} />
             );
           }
           const s = toMin(e.start);
-          const w = toMin(e.end) - s;
-          return (
-            <span key={e.id} className={`absolute inset-y-0 rounded-full ${fill}`} style={{ left: pct(s), width: pct(w) }} title={entryLabel(e)}>
-              {labels && (
-                <span className="absolute left-0 top-full mt-0.5 whitespace-nowrap text-[10px] text-fg-muted">{entryLabel(e)}</span>
-              )}
-            </span>
-          );
+          return <span key={e.id} className={`absolute inset-y-0 rounded-[4px] ${fill}`} style={blockStyle(s, toMin(e.end) - s)} title={entryLabel(e)} />;
         })}
       </div>
+      {labels && (
+        <div aria-hidden="true" className="relative mt-0.5" style={{ height: Math.max(lines, 1) * LINE_PX }}>
+          {placed
+            .filter((l) => l.line != null)
+            .map((l) => (
+              <span key={l.id} className="absolute whitespace-nowrap text-[10px] leading-[14px] text-fg-muted" style={{ left: l.x, top: l.line * LINE_PX }}>
+                {l.text}
+              </span>
+            ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -228,7 +280,7 @@ function MiniBar({ row }) {
 
 const COLS = "grid grid-cols-[8.5rem_minmax(8rem,1fr)_4.5rem_4.5rem_5.5rem] items-center gap-3";
 
-function DayTable({ rows, today, canWrite, onLog, onEditPlan, onEditLog }) {
+function DayTable({ rows, today, withYear, canWrite, onLog, onEditPlan, onEditLog }) {
   const [open, setOpen] = useState(() => new Set([today]));
   const toggle = (d) => setOpen((s) => (s.has(d) ? new Set([...s].filter((x) => x !== d)) : new Set([...s, d])));
   return (
@@ -247,6 +299,7 @@ function DayTable({ rows, today, canWrite, onLog, onEditPlan, onEditLog }) {
               key={r.date}
               row={r}
               isToday={r.date === today}
+              withYear={withYear}
               expanded={open.has(r.date)}
               onToggle={() => toggle(r.date)}
               canWrite={canWrite}
@@ -264,7 +317,7 @@ function DayTable({ rows, today, canWrite, onLog, onEditPlan, onEditLog }) {
 const OverPill = ({ min }) =>
   min ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">{formatOver(min)}</span> : <span className="text-fg-muted">–</span>;
 
-function DayRow({ row, isToday, expanded, onToggle, canWrite, onLog, onEditPlan, onEditLog }) {
+function DayRow({ row, isToday, withYear, expanded, onToggle, canWrite, onLog, onEditPlan, onEditLog }) {
   const valTone = isToday ? "text-accent-fg" : "text-fg";
   const panelId = `wp-day-${row.date}`;
   return (
@@ -280,7 +333,7 @@ function DayRow({ row, isToday, expanded, onToggle, canWrite, onLog, onEditPlan,
           >
             <ChevronRight className={`mt-0.5 size-4 shrink-0 text-fg-muted transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden="true" />
             <span>
-              <span className="block text-sm font-bold text-fg">{formatThaiDay(row.date)}</span>
+              <span className="block text-sm font-bold text-fg">{formatThaiDay(row.date, { year: withYear })}</span>
               {row.label && <span className={`block text-[11px] font-semibold ${LABEL_TONE[row.label.key]}`}>{row.label.text}</span>}
             </span>
           </button>

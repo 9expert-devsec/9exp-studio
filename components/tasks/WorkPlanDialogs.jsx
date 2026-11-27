@@ -16,7 +16,19 @@ import Modal from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
 import { input, label } from "@/components/projects/ProjectForm";
 import { formatThaiDay } from "@/lib/projects/format";
-import { addDays, checkLogs, checkPlans, daySummary, entryMinutes, formatDuration, formatOver, parseEntry } from "@/lib/tasks/workplan";
+import TimeField from "@/components/tasks/TimeField";
+import {
+  addDays,
+  checkLogs,
+  checkPlans,
+  daySummary,
+  entryMinutes,
+  formatDuration,
+  formatOver,
+  parseEntry,
+  pastDueDays,
+  pastDueWarning,
+} from "@/lib/tasks/workplan";
 
 // ── Shared bits ───────────────────────────────────────────────────────────
 
@@ -220,7 +232,9 @@ function PlanForm({ panel, person, entry, taskPlans, onDone }) {
         const v = values[i];
         const ck = checks[i];
         const err = cardError(i);
-        const border = err ? "border-danger" : ck?.warning ? "border-warning" : "border-line";
+        // Round 47.1: the past-due note depends on the DATE only — shown before the times are filled.
+        const dueWarning = pastDueWarning(pastDueDays(c.date, wp.dueDate));
+        const border = err ? "border-danger" : dueWarning ? "border-warning" : "border-line";
         const summary = v
           ? `${formatThaiDay(v.date)} · ${v.mode === "range" ? `${v.start}–${v.end} · ${formatDuration(v.minutes)}` : `${formatDuration(v.minutes)} (ไม่ระบุเวลา)`}`
           : c.date
@@ -263,16 +277,16 @@ function PlanForm({ panel, person, entry, taskPlans, onDone }) {
               </div>
             </div>
             {c.mode === "range" ? (
-              <div className="grid grid-cols-[1fr_1fr_auto] items-end gap-3">
+              <div className="grid grid-cols-[1fr_1fr_auto] items-start gap-3">
                 <div>
                   <label htmlFor={`${id}-start`} className={label}>เริ่ม</label>
-                  <input id={`${id}-start`} type="time" step={300} value={c.start} onChange={(e) => update(c.key, { start: e.target.value })} className={input} />
+                  <TimeField id={`${id}-start`} value={c.start} onChange={(v) => update(c.key, { start: v })} />
                 </div>
                 <div>
                   <label htmlFor={`${id}-end`} className={label}>สิ้นสุด</label>
-                  <input id={`${id}-end`} type="time" step={300} value={c.end} onChange={(e) => update(c.key, { end: e.target.value })} className={input} />
+                  <TimeField id={`${id}-end`} value={c.end} onChange={(v) => update(c.key, { end: v })} />
                 </div>
-                <span className="mb-2 rounded-full bg-plan-soft px-2.5 py-1 text-xs font-semibold text-plan-fg">
+                <span className="mt-8 rounded-full bg-plan-soft px-2.5 py-1 text-xs font-semibold text-plan-fg">
                   {v ? formatDuration(v.minutes) : "–"}
                 </span>
               </div>
@@ -297,7 +311,7 @@ function PlanForm({ panel, person, entry, taskPlans, onDone }) {
               </div>
             )}
             {err && <Note tone="error">{err}</Note>}
-            {!err && ck?.warning && <Note tone="warning">{ck.warning}</Note>}
+            {!err && dueWarning && <Note tone="warning">{dueWarning}</Note>}
             {!err && ck?.info && <Note tone="info">{ck.info}</Note>}
           </section>
         );
@@ -460,38 +474,34 @@ function LogForm({ panel, person, entry, initialDate, taskEntries, onDone }) {
               const v = values[i];
               return (
                 <div key={r.key}>
-                  <div className="grid grid-cols-[1fr_1fr_6.5rem_auto] items-center gap-2">
-                    <input
-                      type="time"
-                      step={300}
-                      aria-label={`เริ่ม ช่วงที่ ${i + 1}`}
+                  <div className="grid grid-cols-[1fr_1fr_6.5rem_auto] items-start gap-2">
+                    <TimeField
+                      id={`log-${r.key}-start`}
+                      ariaLabel={`เริ่ม ช่วงที่ ${i + 1}`}
                       value={r.start}
-                      onChange={(e) => {
+                      onChange={(v) => {
                         setServerErrors({});
-                        setRows((list) => list.map((x) => (x.key === r.key ? { ...x, start: e.target.value } : x)));
+                        setRows((list) => list.map((x) => (x.key === r.key ? { ...x, start: v } : x)));
                       }}
-                      className={input}
-                      aria-invalid={!!err || undefined}
+                      invalid={!!err}
                     />
-                    <input
-                      type="time"
-                      step={300}
-                      aria-label={`สิ้นสุด ช่วงที่ ${i + 1}`}
+                    <TimeField
+                      id={`log-${r.key}-end`}
+                      ariaLabel={`สิ้นสุด ช่วงที่ ${i + 1}`}
                       value={r.end}
-                      onChange={(e) => {
+                      onChange={(v) => {
                         setServerErrors({});
-                        setRows((list) => list.map((x) => (x.key === r.key ? { ...x, end: e.target.value } : x)));
+                        setRows((list) => list.map((x) => (x.key === r.key ? { ...x, end: v } : x)));
                       }}
-                      className={input}
-                      aria-invalid={!!err || undefined}
+                      invalid={!!err}
                     />
-                    <span className="text-right text-sm font-semibold text-accent-fg">{v ? formatDuration(v.minutes) : "–"}</span>
+                    <span className="pt-2.5 text-right text-sm font-semibold text-accent-fg">{v ? formatDuration(v.minutes) : "–"}</span>
                     {rows.length > 1 ? (
                       <button
                         type="button"
                         onClick={() => setRows((list) => list.filter((x) => x.key !== r.key))}
                         aria-label={`ลบช่วงที่ ${i + 1}`}
-                        className="flex size-8 items-center justify-center rounded-[8px] text-fg-muted hover:bg-card-inset hover:text-danger focus-visible:outline-2 focus-visible:outline-brand-500"
+                        className="mt-1.5 flex size-8 items-center justify-center rounded-[8px] text-fg-muted hover:bg-card-inset hover:text-danger focus-visible:outline-2 focus-visible:outline-brand-500"
                       >
                         <X className="size-4" aria-hidden="true" />
                       </button>
