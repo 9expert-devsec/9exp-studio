@@ -844,7 +844,11 @@ const STEP_SR = { complete: " (done)", current: " (current)", warning: " (curren
 function Stepper({ stepper }) {
   return (
     <div className={stepper.terminal ? "opacity-60" : ""}>
-      <ol className="flex overflow-x-auto pb-1" aria-label="Status steps">
+      {/* Round 58.2: overflow-x:auto makes overflow-y auto too, so this list clips at
+          its padding edge. The current step's ring-4 halo (a 4px box-shadow) needs room
+          on EVERY side: p-1.5 (6px) gives it that, and the matching -m-1.5 keeps the
+          circles exactly where they were. pb-2.5 keeps the old scrollbar gap. */}
+      <ol className="-m-1.5 flex overflow-x-auto p-1.5 pb-2.5" aria-label="Status steps">
         {stepper.steps.map((s, i) => (
           <li key={s.key} className="relative flex min-w-[5.5rem] flex-1 flex-col items-center gap-2 text-center">
             {i > 0 && (
