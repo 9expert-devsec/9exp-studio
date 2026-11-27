@@ -794,15 +794,24 @@ function ClipInfoColumn({ panel }) {
 
 // ── Right column ──────────────────────────────────────────────────────────
 
+// Step circle per state: border + text, and the FILL drawn as an inner layer
+// (STEP_FILL) over the circle's opaque bg-card base — round 50.1: a translucent
+// tint (warning) must never let anything behind it show through.
 const STEP_DOT = {
-  complete: "border-success bg-success text-white",
-  current: "border-brand-500 bg-brand-500 text-navy ring-4 ring-brand-500/20",
+  complete: "border-success text-white",
+  current: "border-brand-500 text-navy ring-4 ring-brand-500/20",
   // Round 45: Clip แก้ไข sits on "ตรวจงาน" with a warning (frame 341:2231).
-  warning: "border-warning bg-warning/15 text-warning ring-4 ring-warning/15",
+  warning: "border-warning text-warning ring-4 ring-warning/15",
   // Round 49: Article / Post รอชิ้นงาน before it is reached — "(ถ้ามี)".
-  optional: "border-dashed border-line bg-card text-fg-muted",
-  upcoming: "border-line bg-card text-fg-muted",
-  muted: "border-line bg-track text-fg-muted",
+  optional: "border-dashed border-line text-fg-muted",
+  upcoming: "border-line text-fg-muted",
+  muted: "border-line text-fg-muted",
+};
+const STEP_FILL = {
+  complete: "bg-success",
+  current: "bg-brand-500",
+  warning: "bg-warning/15",
+  muted: "bg-track",
 };
 const STEP_LABEL = {
   complete: "text-fg",
@@ -821,19 +830,24 @@ function Stepper({ stepper }) {
         {stepper.steps.map((s, i) => (
           <li key={s.key} className="relative flex min-w-[5.5rem] flex-1 flex-col items-center gap-2 text-center">
             {i > 0 && (
+              // Round 50.1: a SEGMENT from the previous circle's edge to this one's
+              // (radius 1rem + the 0.25rem halo), never behind a circle.
               <span
                 aria-hidden="true"
-                className={`absolute right-1/2 top-4 h-0.5 w-full -translate-y-1/2 ${s.state === "complete" || s.state === "current" || s.state === "warning" ? "bg-success" : "bg-line"}`}
+                className={`absolute left-[calc(-50%+1.25rem)] right-[calc(50%+1.25rem)] top-4 z-0 h-0.5 -translate-y-1/2 ${s.state === "complete" || s.state === "current" || s.state === "warning" ? "bg-success" : "bg-line"}`}
               />
             )}
-            <span className={`relative z-[1] flex size-8 items-center justify-center rounded-full border-2 text-xs font-bold ${STEP_DOT[s.state]}`}>
-              {s.state === "complete" ? (
-                <Check className="size-4" aria-hidden="true" />
-              ) : s.state === "warning" ? (
-                <TriangleAlert className="size-4" aria-hidden="true" />
-              ) : (
-                i + 1
-              )}
+            <span className={`relative z-[1] flex size-8 items-center justify-center rounded-full border-2 bg-card text-xs font-bold ${STEP_DOT[s.state]}`}>
+              {STEP_FILL[s.state] && <span aria-hidden="true" className={`absolute inset-0 rounded-full ${STEP_FILL[s.state]}`} />}
+              <span className="relative">
+                {s.state === "complete" ? (
+                  <Check className="size-4" aria-hidden="true" />
+                ) : s.state === "warning" ? (
+                  <TriangleAlert className="size-4" aria-hidden="true" />
+                ) : (
+                  i + 1
+                )}
+              </span>
             </span>
             <span className={`text-xs ${STEP_LABEL[s.state]}`}>
               {s.label}
