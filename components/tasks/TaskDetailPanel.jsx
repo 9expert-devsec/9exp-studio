@@ -13,8 +13,10 @@
 // Left column: type + ID chips, title, description, the info rows that apply to
 // the task's type. Right column: Status & Progress (stepper, current status with
 // an inline change, Post asset status, progress) and the tabs — Activity · Work
-// Plan · Reviews · Comments (round 46: Reviews for Clip / Graphic and Comments are
-// live; round 47: Work Plan, every type — components/tasks/WorkPlanTab.jsx).
+// Plan · Reviews (round 46: Reviews for Clip / Graphic; round 47: Work Plan, every
+// type — components/tasks/WorkPlanTab.jsx; round 53: the Comments tab was removed).
+// Round 53 (lg+): the left card is its own scroll container (themed app-scrollbar
+// inside its border); stacked below lg, the panel body scrolls as a whole.
 // Clip (round 45, Figma 341:*): its own left column (ClipInfoColumn, with the
 // Related Production card) and, under the 5-step stepper, the Current Status
 // card with ONE primary action (lib/tasks/clipFlow.js clipPrimaryAction).
@@ -69,7 +71,6 @@ import { changeTaskStatusAction, loadTaskActivityAction, loadTaskPanelAction } f
 import StatusMoveForm from "@/components/tasks/StatusMoveForm";
 import ReviewDialog from "@/components/tasks/ReviewDialog";
 import ReviewsTab from "@/components/tasks/ReviewsTab";
-import CommentsTab from "@/components/tasks/CommentsTab";
 import WorkPlanTab from "@/components/tasks/WorkPlanTab";
 import TypeStatusCard, { ShootDialog } from "@/components/tasks/TypeStatusCard";
 import Modal from "@/components/ui/Modal";
@@ -283,11 +284,12 @@ function PanelBody({ panel }) {
           View only — you&apos;re not a member of this project.
         </p>
       )}
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card-inset/40 p-3 sm:p-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:gap-4 lg:overflow-hidden">
-        <div className="relative min-h-0 lg:overflow-y-auto lg:overscroll-contain">
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-card-inset/40 p-3 sm:p-4 lg:grid lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:grid-rows-[minmax(0,1fr)] lg:gap-4 lg:overflow-hidden">
+        {/* Round 53: the column is a plain full-height box; its CARD scrolls (INFO_CARD). */}
+        <div className="relative min-h-0 lg:flex lg:flex-col">
           <InfoColumn panel={panel} />
         </div>
-        <div className="relative mt-3 min-h-0 lg:mt-0 lg:overflow-y-auto lg:overscroll-contain">
+        <div className="app-scrollbar relative mt-3 min-h-0 lg:mt-0 lg:overflow-y-auto lg:overscroll-contain">
           <StatusColumn panel={panel} />
         </div>
       </div>
@@ -459,10 +461,18 @@ function RelatedBlock({ related }) {
   );
 }
 
+/**
+ * The left card (every type). lg+: it fills the column and scrolls INSIDE its
+ * border with the themed thin scrollbar; the track is inset top/bottom so the
+ * thumb never pokes into the rounded corners. Below lg it is a normal card.
+ */
+const INFO_CARD =
+  "rounded-[16px] border border-line bg-card p-4 sm:p-5 lg:min-h-0 lg:flex-1 lg:overflow-y-auto lg:overscroll-contain lg:pr-3 app-scrollbar [&::-webkit-scrollbar-track]:my-3";
+
 function InfoColumn({ panel }) {
   if (panel.clip) return <ClipInfoColumn panel={panel} />;
   return (
-    <section aria-label="Task information" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+    <section aria-label="Task information" className={INFO_CARD}>
       <InfoHead panel={panel} />
 
       <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
@@ -740,7 +750,7 @@ const dash = <span className="text-fg-muted">—</span>;
 function ClipInfoColumn({ panel }) {
   const { clip } = panel;
   return (
-    <section aria-label="Task information" className="rounded-[16px] border border-line bg-card p-4 sm:p-5">
+    <section aria-label="Task information" className={INFO_CARD}>
       <InfoHead panel={panel} />
 
       <dl className="mt-4 divide-y divide-line-subtle border-t border-line-subtle">
@@ -1114,7 +1124,7 @@ function ClipStatusCard({ panel, onReview }) {
   );
 }
 
-// ── Tabs (Activity · Work Plan · Reviews · Comments, the same for every type) ──
+// ── Tabs (Activity · Work Plan · Reviews, the same for every type) ──────────
 
 function TaskTabs({ panel, tab, setTab, focus }) {
   // Reviews (N): sections waiting on THIS viewer (hidden at 0).
@@ -1123,8 +1133,6 @@ function TaskTabs({ panel, tab, setTab, focus }) {
     { key: "activity", label: "Activity" },
     { key: "work_plan", label: "Work Plan" },
     { key: "reviews", label: reviewCount ? `Reviews (${reviewCount})` : "Reviews" },
-    // Comments (N): non-deleted comments (hidden at 0).
-    { key: "comments", label: panel.comments?.count ? `Comments (${panel.comments.count})` : "Comments" },
   ];
   const onKeyDown = (e) => {
     const i = tabs.findIndex((t) => t.key === tab);
@@ -1137,7 +1145,15 @@ function TaskTabs({ panel, tab, setTab, focus }) {
   };
   return (
     <>
-      <div role="tablist" aria-label="Task sections" onKeyDown={onKeyDown} className="-mx-1 flex gap-1 overflow-x-auto border-b border-line px-1">
+      {/* Round 53: the baseline is an inset shadow (not a border the tabs overlap with
+          -mb-px — that 1px made the overflow-x-auto list scroll vertically, with a
+          tiny scrollbar). overflow-y-hidden; a horizontal overflow scrolls bar-less. */}
+      <div
+        role="tablist"
+        aria-label="Task sections"
+        onKeyDown={onKeyDown}
+        className="no-scrollbar -mx-1 flex gap-1 overflow-x-auto overflow-y-hidden px-1 shadow-[inset_0_-1px_0_var(--ds-line)]"
+      >
         {tabs.map((t) => {
           const selected = t.key === tab;
           return (
@@ -1150,7 +1166,7 @@ function TaskTabs({ panel, tab, setTab, focus }) {
               aria-controls={`task-panel-${t.key}`}
               tabIndex={selected ? 0 : -1}
               onClick={() => setTab(t.key)}
-              className={`-mb-px min-h-10 shrink-0 border-b-2 px-3 text-sm focus-visible:outline-2 focus-visible:outline-brand-500 ${
+              className={`min-h-10 shrink-0 border-b-2 px-3 text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-brand-500 ${
                 selected ? "border-brand-500 font-semibold text-accent-fg" : "border-transparent text-fg-muted hover:text-fg"
               }`}
             >
@@ -1166,8 +1182,6 @@ function TaskTabs({ panel, tab, setTab, focus }) {
           <WorkPlanTab key={panel.id} panel={panel} />
         ) : tab === "reviews" && panel.review ? (
           <ReviewsTab panel={panel} focus={focus} />
-        ) : tab === "comments" && panel.comments ? (
-          <CommentsTab taskId={panel.id} comments={panel.comments} />
         ) : (
           <p className="rounded-[12px] bg-card-inset py-10 text-center text-sm text-fg-muted">
             {tab === "reviews" ? "งานประเภทนี้ไม่มีการตรวจ" : "เร็ว ๆ นี้"}
