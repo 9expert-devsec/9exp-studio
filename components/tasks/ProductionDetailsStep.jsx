@@ -16,6 +16,7 @@ import RelatedPicker from "@/components/tasks/RelatedPicker";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, label } from "@/components/projects/ProjectForm";
 import { PRODUCTION_PEOPLE_MAX } from "@/lib/tasks/production";
+import ShootFields from "@/components/tasks/ShootFields";
 
 /** Empty Step 2 values (also the shape posted as `details` JSON). */
 export const emptyProductionDetails = () => ({
@@ -29,6 +30,10 @@ export const emptyProductionDetails = () => ({
   startTime: "",
   dueDate: "",
   dueTime: "",
+  // Optional "นัดถ่าย" (round 48): all three or none.
+  shootDate: "",
+  shootTime: "",
+  shootLocation: "",
 });
 
 /**
@@ -133,6 +138,9 @@ export default function ProductionDetailsStep({ values, setField, errors, projec
             hint="Time defaults to 18:00 (Bangkok)."
           />
         </div>
+      </Section>
+      <Section id="sec-production-shoot" title="นัดถ่าย" subtitle="ไม่บังคับ · วัน เวลา และสถานที่ถ่าย (ตั้งหรือเลื่อนได้ภายหลังจาก Task Detail)">
+        <ShootFields id="production-shoot" values={values} setField={setField} errors={errors} />
       </Section>
     </div>
   );

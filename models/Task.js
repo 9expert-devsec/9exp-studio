@@ -42,7 +42,9 @@ const TaskSchema = new mongoose.Schema(
     // null — lib/tasks/clipFlow.js), workLevel, contentReviewer, videoReviewer; graphic: platform, workType, items,
     // fileLocation, photos[{ url, publicId, width, height }], brief, referenceUrl,
     // related, workLevel, contentReviewer, designReviewer; photo: photoType,
-    // related, editor). Graphic File Location / Photo Folder Name + Location live
+    // related, editor, shoot). Production / Photo `shoot` (round 48): { date
+    // "YYYY-MM-DD", time "HH:mm", location } or null; Production also keeps
+    // fileLocation (set by "ลงการ์ดแล้ว"). Graphic File Location / Photo Folder Name + Location live
     // on the TaskFolder. {} = no details yet.
     details: { type: mongoose.Schema.Types.Mixed, default: {} },
     // Folder ID "YYMM-NNN<suffix>" (lib/tasks/folderId.js) — the link to a shared
@@ -50,6 +52,10 @@ const TaskSchema = new mongoose.Schema(
     // Edit may switch it to another folder of the same project + suffix.
     folderId: { type: String, default: undefined },
     createdBy: { type: ObjectId, ref: "User", required: true },
+    // Status-flow timestamps (round 48, lib/tasks/statusView.js FLOW_ACTIONS):
+    // shotAt, doneAt, startedAt, filedAt, editStartedAt, readyAt — set by the
+    // Task Detail primary buttons. Outside `details` so Edit never drops them.
+    flow: { type: mongoose.Schema.Types.Mixed, default: {} },
     // Who made the last write (create / edit / status change / duplicate), from
     // round 33 on; older tasks have none (Task Detail shows only the time).
     updatedBy: { type: ObjectId, ref: "User", default: null },

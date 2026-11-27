@@ -71,6 +71,7 @@ import ReviewDialog from "@/components/tasks/ReviewDialog";
 import ReviewsTab from "@/components/tasks/ReviewsTab";
 import CommentsTab from "@/components/tasks/CommentsTab";
 import WorkPlanTab from "@/components/tasks/WorkPlanTab";
+import TypeStatusCard, { ShootDialog } from "@/components/tasks/TypeStatusCard";
 import Modal from "@/components/ui/Modal";
 import {
   getCachedPanel,
@@ -253,9 +254,15 @@ function NotFound({ failed = false }) {
 /** ⋯ menu + Edit Task (none when read-only). */
 function HeaderActions({ panel }) {
   const close = useDrawerClose();
+  // Round 48: ⋯ → "เลื่อนวันนัดถ่าย" (Production / Photo; same right as Change status).
+  const [reschedule, setReschedule] = useState(false);
+  const canReschedule = !!panel.statusView?.canReschedule && panel.canChangeStatus;
   return (
     <>
-      {panel.menuTask && <TaskMenu task={panel.menuTask} onDeleted={close} />}
+      {panel.menuTask && (
+        <TaskMenu task={panel.menuTask} onDeleted={close} onReschedule={canReschedule ? () => setReschedule(true) : undefined} />
+      )}
+      {canReschedule && reschedule && <ShootDialog panel={panel} open onClose={() => setReschedule(false)} />}
       {panel.editHref && (
         <Link href={panel.editHref} scroll={false} className={buttonClass("primary", "min-h-10")}>
           <Pencil className="size-4" aria-hidden="true" />
@@ -839,15 +846,14 @@ function Stepper({ stepper }) {
 
 /**
  * Current status + "Change status" (round 40): the SAME form as the task ⋯ menu
- * (components/tasks/StatusMoveForm.jsx), offering only the allowed moves. A move
- * into รอตรวจสอบ swaps to the Submit form (round 46). Graphic (old layout, not
- * redesigned): the review action (Review Design / Resubmit) sits under it.
+ * (components/tasks/StatusMoveForm.jsx), offering only the allowed moves. Used by
+ * the types without their own status card (Post, Article). Round 48: Graphic
+ * moved to TypeStatusCard, so the round-46 review button under it is gone.
  */
-function StatusTile({ panel, onReview }) {
+function StatusTile({ panel }) {
   const [open, setOpen] = useState(false);
   const task = panel.menuTask;
   const canChange = panel.canChangeStatus && !!task && (task.statusMoves?.length ?? 0) > 0;
-  const action = panel.review?.action ?? null;
   return (
     <div className="rounded-[14px] bg-card-inset p-3.5">
       <p className="text-xs text-fg-muted">Current Status</p>
@@ -860,12 +866,6 @@ function StatusTile({ panel, onReview }) {
           </button>
         )}
       </div>
-      {action && (
-        <div className="mt-3 flex flex-col gap-1.5">
-          {action.button && <PrimaryActionButton panel={panel} button={action.button} onReview={onReview} />}
-          <p className="text-xs text-fg-muted">{action.helper}</p>
-        </div>
-      )}
       {canChange && (
         <Modal open={open} onClose={() => setOpen(false)} title="Change status" description={`${panel.idChip} · ${panel.title}`} size="md">
           <StatusMoveForm task={task} onDone={() => setOpen(false)} onSaved={() => toast("Status updated")} />
@@ -907,9 +907,11 @@ function StatusColumn({ panel }) {
         </div>
         {panel.clip ? (
           <ClipStatusCard panel={panel} onReview={onReview} />
+        ) : panel.statusView ? (
+          <TypeStatusCard panel={panel} onReview={onReview} />
         ) : (
           <div className={`mt-4 grid gap-3 ${showAsset ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-            <StatusTile panel={panel} onReview={onReview} />
+            <StatusTile panel={panel} />
             {showAsset && (
               <div className="rounded-[14px] bg-card-inset p-3.5">
                 <p className="text-xs text-fg-muted">Asset Status</p>

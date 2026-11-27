@@ -26,6 +26,9 @@ const { ObjectId } = mongoose.Schema.Types;
 //   work_plan        { action: plans_added|plan_edited|plan_moved|plan_deleted|
 //                      log_added|log_edited|log_deleted|plan_past_due,
 //                      personName, count?, minutes?, date?, from?, days?, onBehalf }
+// Status flows (round 48, lib/tasks/statusView.js):
+//   shoot_set        { from: shoot|null, to: shoot } — นัดถ่าย set / moved
+//   status_changed   may carry `action` (the primary button's id), `fileLocation`
 //   status_changed   may carry `review: { cycleNo, result }` = the automatic
 //                    move after the last verdict (actor null = System)
 // Deleted with the task (and with its content).
@@ -41,6 +44,7 @@ export const ACTIVITY_TYPES = [
   "review_verdict",
   "review_withdrawn",
   "work_plan",
+  "shoot_set",
 ];
 
 const TaskActivitySchema = new mongoose.Schema(

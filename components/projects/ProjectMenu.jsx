@@ -18,6 +18,7 @@ import {
   PinOff,
   RotateCcw,
   Trash2,
+  CalendarClock,
 } from "lucide-react";
 import { deleteContentAction, duplicateContentAction } from "@/app/(app)/projects/content-actions";
 import { deleteTaskAction, duplicateTaskAction } from "@/app/(app)/projects/task-actions";
@@ -537,7 +538,7 @@ function DeleteContentConfirm({ content, then, onDone }) {
  * server actions, which also recompute the content/project roll-ups and refresh in
  * place. Renders nothing when neither applies.
  */
-export function TaskMenu({ task, onDeleted }) {
+export function TaskMenu({ task, onDeleted, onReschedule }) {
   const [open, setOpen] = useState(false);
   const [dialog, setDialog] = useState(null);
   const [duplicating, startDuplicate] = useTransition();
@@ -606,6 +607,21 @@ export function TaskMenu({ task, onDeleted }) {
         >
           <ArrowRightLeft className="size-4 text-fg-muted" aria-hidden="true" />
           Change status
+        </button>
+      )}
+      {onReschedule && (
+        // Round 48 (Task Detail only): Production / Photo with an appointment, before ถ่ายแล้ว.
+        <button
+          role="menuitem"
+          type="button"
+          className={itemClass}
+          onClick={() => {
+            setOpen(false);
+            onReschedule();
+          }}
+        >
+          <CalendarClock className="size-4 text-fg-muted" aria-hidden="true" />
+          เลื่อนวันนัดถ่าย
         </button>
       )}
       {task.canDuplicate && (

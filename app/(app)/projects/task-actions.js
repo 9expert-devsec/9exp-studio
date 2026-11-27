@@ -46,6 +46,7 @@ import { needsSubmit, reviewMoveOpts } from "@/lib/tasks/reviews";
 import { deleteReviews, withdrawOpenCycle } from "@/lib/tasks/reviewStore";
 import { deleteComments } from "@/lib/tasks/comments";
 import { deleteWorkEntries } from "@/lib/tasks/workplanStore";
+import { flowAction, parseShoot } from "@/lib/tasks/statusView";
 import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
 import TaskFolder from "@/models/TaskFolder";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
@@ -359,6 +360,118 @@ export async function changeTaskStatusAction(formData) {
   await withdrawOpenCycle(task, { from: task.status, to: status, actor: viewer.id });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
+  refresh();
+  return { ok: true };
+}
+
+// ── Status flows (round 48): Production / Graphic / Photo primary buttons ──
+
+const FLOW_FILE_LOCATION_MAX = 1000;
+const STATUS_DENIED = "Only the task's creator or assignee, the project owner or an admin can change its status.";
+const moveOpts = (viewer, project, task) => ({
+  canOverride: canOverrideTaskStatus(viewer, project),
+  hasRelatedAssets: taskHasRelatedAssets(task),
+  statusBeforeHold: task.statusBeforeHold ?? null,
+  ...reviewMoveOpts(task.type),
+});
+
+/**
+ * A Task Detail primary button (lib/tasks/statusView.js FLOW_ACTIONS): ONE legal
+ * move from the action's `from` status (canTransition), stamping Task.flow[stamp];
+ * File Location actions also save it (Production → details.fileLocation; Photo →
+ * its folder, or details.folderLocation without one). Same permission as Change
+ * status. Form: projectId, contentId, taskId, actionId, fileLocation?
+ */
+export async function runFlowAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  const { viewer, project, content } = scope;
+  const task = await findContentTask(project, content, str(formData.get("taskId")));
+  if (!task) return fail(TASK_NOT_FOUND);
+  if (!canChangeTaskStatus(viewer, project, task)) return fail(project.status === "cancelled" ? PROJECT_CANCELLED : STATUS_DENIED);
+
+  const actionId = str(formData.get("actionId"));
+  const a = flowAction(task.type, actionId);
+  if (!a || a.dialog === "shoot") return fail("This action isn't available for this task.");
+  if (task.status !== a.from) return fail("This task's status just changed. Reload and try again.");
+  const move = canTransition(task.type, task.status, a.to, moveOpts(viewer, project, task));
+  if (!move.ok) return fail(move.reason);
+
+  const set = { status: a.to, statusBeforeHold: null, updatedBy: viewer.id };
+  if (a.stamp) set[`flow.${a.stamp}`] = new Date();
+  let fileLocation = "";
+  if (a.dialog === "fileLocation") {
+    fileLocation = str(formData.get("fileLocation")).trim();
+    if (!fileLocation) return fail(CHECK_FIELDS, { fileLocation: "ระบุ File Location" });
+    if (fileLocation.length > FLOW_FILE_LOCATION_MAX) return fail(CHECK_FIELDS, { fileLocation: `ไม่เกิน ${FLOW_FILE_LOCATION_MAX} ตัวอักษร` });
+    if (task.type !== "photo") set["details.fileLocation"] = fileLocation;
+    else if (!task.folderId) set["details.folderLocation"] = fileLocation;
+  }
+
+  const res = await Task.updateOne({ _id: task._id, content: content._id, project: project._id, status: task.status }, { $set: set });
+  if (!res.matchedCount) return fail("This task's status just changed. Reload and try again.");
+  // Photo with a shared folder: the location is the FOLDER's (round 36).
+  if (fileLocation && task.type === "photo" && task.folderId) {
+    await TaskFolder.updateOne({ folderId: task.folderId, project: project._id }, { $set: { location: fileLocation } });
+  }
+  await logActivity({
+    task: task._id,
+    project: project._id,
+    actor: viewer.id,
+    type: "status_changed",
+    data: { from: task.status, to: a.to, action: actionId, ...(fileLocation ? { fileLocation } : {}) },
+  });
+  // Round 45 automation, unchanged: Production เสร็จสมบูรณ์ → linked Clips at รอ Source.
+  if (task.type === "production") await applySourceReady({ ...task, status: a.to });
+
+  await recomputeRollups({ projectId: project._id, contentId: content._id });
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Set / move the shoot appointment (Production, Photo): details.shoot = { date,
+ * time, location } (all required). `advance=1` (Production "ตั้งวันถ่ายทำ" at
+ * ยังไม่เริ่ม) also moves the status to นัดถ่ายแล้ว. Activity: old → new.
+ * Form: projectId, contentId, taskId, shootDate, shootTime, shootLocation, advance?
+ */
+export async function setShootAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  const { viewer, project, content } = scope;
+  const task = await findContentTask(project, content, str(formData.get("taskId")));
+  if (!task) return fail(TASK_NOT_FOUND);
+  if (task.type !== "production" && task.type !== "photo") return fail("This task type has no shoot appointment.");
+  if (!canChangeTaskStatus(viewer, project, task)) return fail(project.status === "cancelled" ? PROJECT_CANCELLED : STATUS_DENIED);
+
+  const parsed = parseShoot(
+    { date: str(formData.get("shootDate")), time: str(formData.get("shootTime")), location: str(formData.get("shootLocation")) },
+    { required: true }
+  );
+  if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
+  const shoot = parsed.value;
+
+  const set = { "details.shoot": shoot, updatedBy: viewer.id };
+  const a = str(formData.get("advance")) === "1" ? flowAction(task.type, "set_shoot") : null;
+  if (a) {
+    if (task.status !== a.from) return fail("This task's status just changed. Reload and try again.");
+    const move = canTransition(task.type, task.status, a.to, moveOpts(viewer, project, task));
+    if (!move.ok) return fail(move.reason);
+    Object.assign(set, { status: a.to, statusBeforeHold: null });
+  }
+  const res = await Task.updateOne({ _id: task._id, content: content._id, project: project._id, status: task.status }, { $set: set });
+  if (!res.matchedCount) return fail("This task's status just changed. Reload and try again.");
+
+  const base = { task: task._id, project: project._id, actor: viewer.id };
+  const prev = task.details?.shoot ?? null;
+  const same = !!prev && prev.date === shoot.date && prev.time === shoot.time && prev.location === shoot.location;
+  await logActivity(
+    [
+      same ? null : { ...base, type: "shoot_set", data: { from: prev, to: shoot } },
+      a ? { ...base, type: "status_changed", data: { from: task.status, to: a.to, action: "set_shoot" } } : null,
+    ].filter(Boolean)
+  );
+  if (a) await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
   return { ok: true };
 }
