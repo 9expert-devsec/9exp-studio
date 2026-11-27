@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ChevronRight } from "lucide-react";
+import { ProjectCrumbLabel } from "@/components/projects/ProjectBreadcrumb";
 import { ContentSummaryCard, TasksSection } from "@/components/projects/ContentViews";
 import { ContentListSkeleton } from "@/components/projects/Skeletons";
 import { buttonClass } from "@/components/ui/Button";
@@ -38,6 +39,8 @@ async function ContentDetail({ params, searchParams }) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Round 55: the layout's breadcrumb (never unmounted) shows this name last. */}
+      <ProjectCrumbLabel label={content.name} />
       <div className="flex min-w-0 flex-wrap items-center gap-3">
         <Link href={content.projectHref} className={buttonClass("outline", "min-h-9")}>
           <ArrowLeft className="size-4" aria-hidden="true" />

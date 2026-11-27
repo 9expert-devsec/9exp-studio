@@ -4,7 +4,7 @@ import Avatar from "@/components/ui/Avatar";
 import { projectIcon } from "@/lib/projects/icons";
 import { statusInfo } from "@/lib/projects/status";
 
-const TILE = {
+export const TILE = {
   lg: { box: "size-24 rounded-[24px]", icon: "size-11" },
   md: { box: "size-14 rounded-[16px]", icon: "size-[26px]" },
   base: { box: "size-12 rounded-[14px]", icon: "size-6" },

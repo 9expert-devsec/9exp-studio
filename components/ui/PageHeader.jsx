@@ -62,9 +62,9 @@ export default function PageHeader({ title, breadcrumb, actions, children }) {
   return (
     <div className="flex flex-col gap-2.5">
       {trail && (
-        <nav aria-label="Breadcrumb" className={hasTitleRow ? "" : "flex items-center gap-2"}>
+        <nav aria-label="Breadcrumb" className={hasTitleRow ? "h-6" : "h-6 flex items-center gap-2"}>
           {!hasTitleRow && backLink}
-          <ol className="flex flex-wrap items-center gap-1 text-xs text-fg-muted">
+          <ol className="flex min-w-0 flex-nowrap items-center gap-1 text-xs text-fg-muted">
             {trail.map((crumb, i) => {
               const last = i === trail.length - 1;
               return (

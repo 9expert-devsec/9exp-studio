@@ -3,20 +3,18 @@
 // Tab bar for /projects/[id]/(tabs). Rendered ONCE by the shared layout; the active
 // tab comes from the segments below that layout:
 //   ["overview"] → Overview;  ["timeline"] → Timeline;  anything else ([], ["content", …]) → Content.
-// (The breadcrumb is the layout's @crumbs slot, built on the server.)
+// (The breadcrumb is ProjectBreadcrumb, also rendered once by the layout — round 55.)
 // useSelectedLayoutSegments suspends on this dynamic route (no
 // generateStaticParams), so the layout renders this inside <Suspense>.
 
 import { useEffect } from "react";
 import Link from "next/link";
 import { useSelectedLayoutSegments } from "next/navigation";
+import { PROJECT_SCROLL_ID, TAB_BASE, TAB_IDLE_COLOR, TAB_LIST, TAB_NAV } from "./projectTopStyles";
 
-/** The project pages' in-app scroll container (round 52, the (tabs) layout). */
-export const PROJECT_SCROLL_ID = "project-scroll";
-
-const tabBase = "inline-flex min-h-11 items-center border-b-2 px-4 text-sm";
-const tabActive = `${tabBase} border-brand-500 font-semibold text-accent-fg`;
-const tabIdle = `${tabBase} border-transparent font-medium text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500`;
+// Round 55: classes shared with ProjectTopSkeleton (./projectTopStyles).
+const tabActive = `${TAB_BASE} border-brand-500 font-semibold text-accent-fg`;
+const tabIdle = `${TAB_BASE} ${TAB_IDLE_COLOR} hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500`;
 
 /** Content · Timeline · Overview. Tabs are real links. */
 export function ProjectTabs({ href }) {
@@ -36,8 +34,8 @@ export function ProjectTabs({ href }) {
     </li>
   );
   return (
-    <nav aria-label="Project sections" className="border-b border-line">
-      <ul className="-mb-px flex gap-1">
+    <nav aria-label="Project sections" className={TAB_NAV}>
+      <ul className={TAB_LIST}>
         {link("content", href, "Content")}
         {link("timeline", `${href}/timeline`, "Timeline")}
         {link("overview", `${href}/overview`, "Overview")}

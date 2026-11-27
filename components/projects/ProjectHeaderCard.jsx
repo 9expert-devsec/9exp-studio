@@ -5,6 +5,9 @@
 // property and read by the literal `.project-tint` class (app/globals.css):
 // a soft diagonal wash + tinted border, in both themes. No progress section (the
 // Overview stat tiles carry the numbers).
+// Round 55: classes come from ./projectTopStyles (shared with ProjectTopSkeleton);
+// the name is clamped to one line (full name in `title`), so the card height is
+// fixed and the first-entry skeleton matches it exactly.
 
 import Link from "next/link";
 import { CalendarDays, Pencil } from "lucide-react";
@@ -14,6 +17,16 @@ import { projectIcon } from "@/lib/projects/icons";
 import ProjectMenu from "./ProjectMenu";
 import ShareButton from "./ShareButton";
 import { Chip, ProjectIconTile, StatusChip } from "./ProjectBits";
+import {
+  HEADER_ACTIONS,
+  HEADER_CARD_PAD,
+  HEADER_LABEL,
+  HEADER_LEFT,
+  HEADER_META,
+  HEADER_NAME,
+  HEADER_ROW,
+  HEADER_TEXT,
+} from "./projectTopStyles";
 
 export default function ProjectHeaderCard({ project }) {
   const cancelled = project.status === "cancelled";
@@ -22,15 +35,17 @@ export default function ProjectHeaderCard({ project }) {
     <Card
       padded={false}
       style={{ "--project-tint": projectIcon(project.icon).color }}
-      className={`project-tint p-5 sm:p-6 ${cancelled ? "opacity-80" : ""}`}
+      className={`project-tint ${HEADER_CARD_PAD} ${cancelled ? "opacity-80" : ""}`}
     >
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-        <div className="flex min-w-0 gap-4 sm:gap-5">
+      <div className={HEADER_ROW}>
+        <div className={HEADER_LEFT}>
           <ProjectIconTile icon={project.icon} size="lg" />
-          <div className="min-w-0">
-            <p className="text-[11px] font-semibold uppercase tracking-wider text-fg-muted">Project name</p>
-            <h1 className="mt-1 break-words text-2xl font-bold leading-tight text-fg sm:text-[28px]">{project.name}</h1>
-            <div className="mt-3 flex flex-wrap items-center gap-2">
+          <div className={HEADER_TEXT}>
+            <p className={HEADER_LABEL}>Project name</p>
+            <h1 className={HEADER_NAME} title={project.name}>
+              {project.name}
+            </h1>
+            <div className={HEADER_META}>
               <Chip>{project.typeLabel}</Chip>
               <StatusChip status={project.status} />
               {project.datesLabel && (
@@ -43,7 +58,7 @@ export default function ProjectHeaderCard({ project }) {
           </div>
         </div>
 
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
+        <div className={HEADER_ACTIONS}>
           <ShareButton href={project.href} />
           {project.canEdit && (
             <Link href={`${project.href}/edit`} className={buttonClass("primary")}>
