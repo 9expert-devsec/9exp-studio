@@ -7,10 +7,15 @@
 //     "" on open too, so the first results show before typing.
 //   - single (value: option | null) or multiple (value: option[]); the chosen
 //     option(s) render as chips under the input, each with a × to remove.
-//   - single + `renderValue`: once picked, the search input is REPLACED by one
-//     full-width row (same height as the input) rendering the value, with a ×
-//     ("Remove <label>") that clears it and brings the search back, focused.
-//     `labelledBy` names that row (the field label's id).
+//   - single: once picked, the search input is REPLACED by one full-width row
+//     (same height as the input) showing the value — `renderValue`, else
+//     `renderOption` (icon + label), else the label — plus a × ("Remove <label>").
+//     Round 50: the row itself is a button carrying the field `id` (so a
+//     <label for> opens the list, never clears); clicking it swaps back to the
+//     search input with the list open and the current value highlighted. The ×
+//     has its OWN id (`<id>-clear`) and a fixed 32×32 hit area.
+//   - opens ONLY on a user action (click, typing, ArrowDown / Alt+ArrowDown) —
+//     never on focus, autofocus or programmatic focus (round 50).
 //   - `header`: optional content at the top of the popover (e.g. Public | Online);
 //     `searchKey` re-runs the search when it changes.
 // Keyboard: ↓/↑ move (↓ opens), Enter picks, Escape closes. Focus moving into the
@@ -46,6 +51,8 @@ export default function Combobox({
 }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  // Single with a value: true while the search input is shown to change it.
+  const [editing, setEditing] = useState(false);
   const [active, setActive] = useState(-1);
   const [remote, setRemote] = useState({ results: [], loading: false, error: "" });
   const requestRef = useRef(0);
@@ -53,13 +60,14 @@ export default function Combobox({
   const inputRef = useRef(null);
   const refocusRef = useRef(false);
 
-  // After × clears a single value, the search input comes back: focus it.
+  // After × clears a single value (or the value row is clicked to change it),
+  // the search input comes back: focus it (focus alone never opens the list).
   useEffect(() => {
-    if (!value && refocusRef.current) {
+    if ((!value || editing) && refocusRef.current) {
       refocusRef.current = false;
       inputRef.current?.focus();
     }
-  }, [value]);
+  }, [value, editing]);
   const listId = useId();
   const statusId = useId();
 
@@ -96,6 +104,7 @@ export default function Combobox({
     else {
       onChange(o);
       setOpen(false);
+      setEditing(false);
     }
     setQuery("");
     setActive(-1);
@@ -113,24 +122,39 @@ export default function Combobox({
     } else if (e.key === "Enter") {
       e.preventDefault(); // never submit the form from the search box
       if (open && active >= 0) pick(results[active]);
-    } else if (e.key === "Escape" && open) {
+    } else if (e.key === "Escape" && (open || editing)) {
       e.preventDefault();
       e.stopPropagation(); // don't close the surrounding drawer/dialog
       setOpen(false);
+      if (editing) {
+        setEditing(false);
+        setQuery("");
+      }
     }
   };
 
   const optionId = (i) => `${listId}-opt-${i}`;
   const label = (o) => (renderOption ? renderOption(o) : getLabel(o));
 
-  // Single + renderValue + a value: the input is replaced by the value row.
-  const showValueRow = !multiple && !!value && typeof renderValue === "function";
+  // Single + a value (not being changed): the input is replaced by the value row.
+  const showValueRow = !multiple && !!value && !editing;
+  const showValue = (o) => (renderValue ? renderValue(o) : renderOption ? renderOption(o) : <span className="truncate">{getLabel(o)}</span>);
 
   const clearValue = () => {
     refocusRef.current = true;
     setQuery("");
     setActive(-1);
+    setEditing(false);
     onChange(null);
+  };
+  /** The value row was clicked: back to the search input, list open, current value highlighted. */
+  const startChange = () => {
+    refocusRef.current = true;
+    setEditing(true);
+    setQuery("");
+    setOpen(true);
+    const i = isAsync ? -1 : (options ?? []).slice(0, STATIC_MAX).findIndex((o) => getKey(o) === getKey(value));
+    setActive(i);
   };
 
   if (showValueRow) {
@@ -139,13 +163,28 @@ export default function Combobox({
         role="group"
         aria-labelledby={labelledBy}
         aria-describedby={describedBy}
-        className={`flex min-h-11 w-full items-center gap-2.5 rounded-[10px] border bg-card py-1.5 pl-3 pr-1.5 text-sm text-fg ${
+        className={`flex min-h-11 w-full items-center gap-1.5 rounded-[10px] border bg-card py-1.5 pl-1.5 pr-1.5 text-sm text-fg ${
           invalid ? "border-danger" : "border-line"
         }`}
       >
-        <span className="flex min-w-0 flex-1 items-center gap-2.5">{renderValue(value)}</span>
         <button
           id={id}
+          type="button"
+          onClick={startChange}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              startChange();
+            }
+          }}
+          aria-haspopup="listbox"
+          aria-labelledby={labelledBy ? `${labelledBy} ${id}` : undefined}
+          className="flex min-h-8 min-w-0 flex-1 items-center gap-2.5 rounded-[8px] px-1.5 text-left focus-visible:outline-2 focus-visible:outline-brand-500"
+        >
+          {showValue(value)}
+        </button>
+        <button
+          id={`${id}-clear`}
           type="button"
           onClick={clearValue}
           aria-label={`Remove ${getLabel(value)}`}
@@ -165,7 +204,13 @@ export default function Combobox({
         ref={wrapRef}
         className="relative"
         onBlur={(e) => {
-          if (!wrapRef.current?.contains(e.relatedTarget)) setOpen(false);
+          if (wrapRef.current?.contains(e.relatedTarget)) return;
+          setOpen(false);
+          // Changing a single value but left without picking: show the value again.
+          if (editing) {
+            setEditing(false);
+            setQuery("");
+          }
         }}
       >
         <Leading className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
@@ -190,7 +235,6 @@ export default function Combobox({
             setActive(0);
           }}
           onKeyDown={onKeyDown}
-          onFocus={() => setOpen(true)}
           onClick={() => setOpen(true)}
           className="min-h-11 w-full rounded-[10px] border border-line bg-card py-2.5 pl-9 pr-9 text-base text-fg outline-none placeholder:text-fg-muted focus:border-brand-500 focus:ring-1 focus:ring-brand-500 aria-[invalid=true]:border-danger sm:text-sm"
         />
@@ -231,7 +275,7 @@ export default function Combobox({
         {open && !loading ? `${results.length} ${results.length === 1 ? "result" : "results"}` : ""}
       </p>
 
-      {selected.length > 0 && !renderValue && (
+      {multiple && selected.length > 0 && (
         <ul className="flex flex-wrap gap-2" aria-label="Selected">
           {selected.map((o) => (
             <li key={getKey(o)} className="flex max-w-full items-center gap-2 rounded-full border border-line bg-card-inset py-1 pl-2 pr-1.5">

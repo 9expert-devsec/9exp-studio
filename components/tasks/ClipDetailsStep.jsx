@@ -51,8 +51,13 @@ export default function ClipDetailsStep({ values, setField, errors, projectId, o
   // Opened from Task Detail "เชื่อม": bring the Related Production field into view.
   useEffect(() => {
     if (focusField !== "relatedProduction") return;
-    document.getElementById("sec-related-production")?.scrollIntoView({ block: "start" });
-    document.getElementById("clip-related-production")?.focus({ preventScroll: true });
+    // Round 50: after the drawer's own initial focus (its effect runs after this
+    // child's and would focus the first field, Video Type), so wait a frame.
+    const raf = requestAnimationFrame(() => {
+      document.getElementById("sec-related-production")?.scrollIntoView({ block: "start" });
+      document.getElementById("clip-related-production")?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(raf);
   }, [focusField]);
 
   const videoTypes = options.video_type ?? [];
