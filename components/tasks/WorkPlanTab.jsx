@@ -14,8 +14,11 @@
 // grouped list with pencils); former people (handover) show under "(เดิม)",
 // read-only except for Manager / superadmin; Log time waits for the task to start.
 
-import { useState } from "react";
-import { CalendarRange, ChevronDown, ChevronRight, Clock, Pencil, Plus } from "lucide-react";
+import { useState, useTransition } from "react";
+import { CalendarRange, Camera, ChevronDown, ChevronRight, Clock, Loader2, Pencil, Plus } from "lucide-react";
+import { logAsPlannedAction } from "@/app/(app)/projects/workplan-actions";
+import { invalidateTaskPanel } from "@/components/tasks/panelCache";
+import { toast } from "@/components/ui/Toast";
 import { LogDialog, PlanDialog } from "@/components/tasks/WorkPlanDialogs";
 import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
@@ -60,8 +63,18 @@ export default function WorkPlanTab({ panel }) {
   const { from, to } = range ?? auto;
   const [dialog, setDialog] = useState(null); // { kind: "plan"|"log", entry?, date? }
   // Edit / delete (incl. a former person's entries for Manager / SA) vs add new ones.
-  const canEdit = !!person && wp.writable.includes(person.id);
-  const canAdd = !!person && wp.canAdd.includes(person.id);
+  const canWrite = !!person && wp.writable.includes(person.id);
+  const canAddAny = !!person && wp.canAdd.includes(person.id);
+  // Round 57.1: Production rights by status (the server enforces the same table).
+  const planOpen = wp.planOpen !== false;
+  const logOpen = wp.logOpen !== false;
+  const canEdit = canWrite && planOpen; // plans
+  const canEditLog = canWrite && logOpen;
+  const canAdd = canAddAny && planOpen;
+  const canAddLog = canAddAny;
+  // Log time is offered (disabled with the reason) until it opens.
+  const logReady = wp.started && logOpen;
+  const logMessage = logOpen ? wp.startMessage : wp.logMessage;
   const current = wp.people.filter((p) => !p.former);
   const formers = wp.people.filter((p) => p.former);
 
@@ -114,21 +127,20 @@ export default function WorkPlanTab({ panel }) {
             </label>
           )}
           <RangePicker from={from} to={to} onChange={setRange} onReset={() => setRange(null)} />
+          {canAddLog && <LogTimeButton onClick={() => openLog()} started={logReady} startMessage={logMessage} className={buttonClass("outline", "min-h-9")} />}
           {canAdd && (
-            <>
-              <LogTimeButton onClick={() => openLog()} started={wp.started} startMessage={wp.startMessage} className={buttonClass("outline", "min-h-9")} />
-              <button type="button" onClick={() => openPlan()} className={buttonClass("primary", "min-h-9")}>
-                <Plus className="size-4" aria-hidden="true" />
-                Add plan
-              </button>
-            </>
+            <button type="button" onClick={() => openPlan()} className={buttonClass("primary", "min-h-9")}>
+              <Plus className="size-4" aria-hidden="true" />
+              Add plan
+            </button>
           )}
         </div>
       </div>
 
-      {canAdd && !wp.started && (
-        <p id="wp-not-started" className="-mt-2 text-right text-xs text-fg-muted">{wp.startMessage}</p>
+      {canAddLog && !logReady && (
+        <p id="wp-not-started" className="-mt-2 text-right text-xs text-fg-muted">{logMessage}</p>
       )}
+      {canAddAny && !planOpen && wp.planMessage && <p className="-mt-2 text-right text-xs text-fg-muted">{wp.planMessage}</p>}
       {person.former && (
         <p className="rounded-[10px] bg-card-inset px-3 py-2 text-xs text-fg-muted">
           {person.name} (เดิม) — ผู้รับงานก่อนเปลี่ยนมือ · {canEdit ? "Manager แก้ไข/ลบรายการเดิมได้" : "ดูได้อย่างเดียว"}
@@ -153,10 +165,10 @@ export default function WorkPlanTab({ panel }) {
       {plans.length === 0 && logs.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[12px] bg-card-inset py-10 text-center">
           <p className="text-sm text-fg-muted">ยังไม่มีแผนหรือเวลาที่บันทึก</p>
-          {canAdd && (
+          {canAddAny && (
             <div className="flex gap-2">
-              <LogTimeButton onClick={() => openLog()} started={wp.started} startMessage={wp.startMessage} className={buttonClass("outline", "min-h-9")} />
-              <button type="button" onClick={() => openPlan()} className={buttonClass("primary", "min-h-9")}>+ Add plan</button>
+              <LogTimeButton onClick={() => openLog()} started={logReady} startMessage={logMessage} className={buttonClass("outline", "min-h-9")} />
+              {canAdd && <button type="button" onClick={() => openPlan()} className={buttonClass("primary", "min-h-9")}>+ Add plan</button>}
             </div>
           )}
         </div>
@@ -167,9 +179,11 @@ export default function WorkPlanTab({ panel }) {
           // Round 47.1: a range across calendar years shows the year on every row date.
           withYear={from.slice(0, 4) !== to.slice(0, 4)}
           canEdit={canEdit}
-          canAdd={canAdd}
-          started={wp.started}
-          startMessage={wp.startMessage}
+          canEditLog={canEditLog}
+          canAdd={canAddLog}
+          started={logReady}
+          startMessage={logMessage}
+          asPlanned={{ panel, person: person.id }}
           onLog={openLog}
           onEditPlan={openPlan}
           onEditLog={(e) => openLog(e.date, e)}
@@ -316,7 +330,24 @@ function EntryGroup({ kind, entries, canEdit, onEdit }) {
               <span className="shrink-0 font-semibold text-fg">{itemRange(e)}</span>
               <span className="shrink-0 text-xs text-fg-muted">{formatDuration(entryMinutes(e))}</span>
               {!plan && e.note && <span className="min-w-0 truncate text-xs text-fg-muted" title={e.note}>{e.note}</span>}
-              {canEdit && (
+              {plan && e.linked && (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-plan-soft px-2 py-0.5 text-[11px] font-semibold text-plan-fg">
+                  <Camera className="size-3" aria-hidden="true" />
+                  จากนัดถ่าย
+                </span>
+              )}
+              {canEdit && plan && e.linked ? (
+                <span title="แก้ที่นัดถ่าย" className="ml-auto inline-flex">
+                  <button
+                    type="button"
+                    disabled
+                    aria-label="แก้ไขแผน (แก้ที่นัดถ่าย)"
+                    className="flex size-7 shrink-0 items-center justify-center rounded-[8px] text-fg-muted opacity-40"
+                  >
+                    <Pencil className="size-3.5" aria-hidden="true" />
+                  </button>
+                </span>
+              ) : canEdit && (
                 <button
                   type="button"
                   onClick={() => onEdit(e)}
@@ -346,11 +377,39 @@ export function LogTimeButton({ onClick, started, startMessage, className }) {
   );
 }
 
+/**
+ * "บันทึกตามแผน" (round 57.1): one click = actual time equal to that day's plan
+ * for the person (the server reads the plans; logAsPlannedAction). Editable after.
+ */
+function LogAsPlannedButton({ panel, person, date }) {
+  const [pending, startTransition] = useTransition();
+  const run = () =>
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.set("projectId", panel.projectId);
+      fd.set("contentId", panel.contentId);
+      fd.set("taskId", panel.id);
+      fd.set("person", person);
+      fd.set("date", date);
+      const res = await logAsPlannedAction(fd);
+      if (res?.ok) {
+        invalidateTaskPanel();
+        toast("บันทึกเวลาตามแผนแล้ว");
+      } else toast(res?.error ?? "Something went wrong.", { tone: "error" });
+    });
+  return (
+    <button type="button" onClick={run} disabled={pending} className={buttonClass("primary", "min-h-9 w-full")}>
+      {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : <Clock className="size-4" aria-hidden="true" />}
+      บันทึกตามแผน
+    </button>
+  );
+}
+
 // ── Table ─────────────────────────────────────────────────────────────────
 
 const COLS = "grid grid-cols-[8.5rem_minmax(8rem,1fr)_4.5rem_4.5rem_5.5rem] items-center gap-3";
 
-function DayTable({ rows, today, withYear, canEdit, canAdd, started, startMessage, onLog, onEditPlan, onEditLog }) {
+function DayTable({ rows, today, withYear, canEdit, canEditLog, canAdd, started, startMessage, asPlanned, onLog, onEditPlan, onEditLog }) {
   const [open, setOpen] = useState(() => new Set([today]));
   const toggle = (d) => setOpen((s) => (s.has(d) ? new Set([...s].filter((x) => x !== d)) : new Set([...s, d])));
   return (
@@ -373,9 +432,12 @@ function DayTable({ rows, today, withYear, canEdit, canAdd, started, startMessag
               expanded={open.has(r.date)}
               onToggle={() => toggle(r.date)}
               canEdit={canEdit}
+              canEditLog={canEditLog}
               canAdd={canAdd}
               started={started}
               startMessage={startMessage}
+              asPlanned={asPlanned}
+              today={today}
               onLog={onLog}
               onEditPlan={onEditPlan}
               onEditLog={onEditLog}
@@ -390,7 +452,10 @@ function DayTable({ rows, today, withYear, canEdit, canAdd, started, startMessag
 const OverPill = ({ min }) =>
   min ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">{formatOver(min)}</span> : <span className="text-fg-muted">–</span>;
 
-function DayRow({ row, isToday, withYear, expanded, onToggle, canEdit, canAdd, started, startMessage, onLog, onEditPlan, onEditLog }) {
+function DayRow({ row, isToday, withYear, expanded, onToggle, canEdit, canEditLog, canAdd, started, startMessage, asPlanned, today, onLog, onEditPlan, onEditLog }) {
+  // Round 57.1: "บันทึกตามแผน" on a day with a นัดถ่าย plan and no time logged yet.
+  const linkedDay = row.plans.some((p) => p.linked);
+  const showAsPlanned = canAdd && started && linkedDay && !row.logs.length && row.date <= today;
   const valTone = isToday ? "text-accent-fg" : "text-fg";
   const panelId = `wp-day-${row.date}`;
   return (
@@ -441,15 +506,21 @@ function DayRow({ row, isToday, withYear, expanded, onToggle, canEdit, canAdd, s
               <p className="text-[11px] text-fg-muted">เกินแผน</p>
               <p className="text-sm font-bold text-success">{row.overMin ? formatOver(row.overMin) : <span className="text-fg-muted">–</span>}</p>
             </div>
+            {showAsPlanned && <LogAsPlannedButton {...asPlanned} date={row.date} />}
             {canAdd && (
-              <LogTimeButton onClick={() => onLog(row.date)} started={started} startMessage={startMessage} className={buttonClass("primary", "min-h-9 w-full")} />
+              <LogTimeButton
+                onClick={() => onLog(row.date)}
+                started={started}
+                startMessage={startMessage}
+                className={buttonClass(showAsPlanned ? "outline" : "primary", "min-h-9 w-full")}
+              />
             )}
           </div>
           <div className="flex min-w-0 flex-col gap-3">
             <DayLanes row={row} />
             <div className="flex flex-col gap-1">
               <EntryGroup kind="plan" entries={row.plans} canEdit={canEdit} onEdit={onEditPlan} />
-              <EntryGroup kind="log" entries={row.logs} canEdit={canEdit} onEdit={onEditLog} />
+              <EntryGroup kind="log" entries={row.logs} canEdit={canEditLog} onEdit={onEditLog} />
             </div>
           </div>
         </div>

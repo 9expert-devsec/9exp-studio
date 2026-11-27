@@ -28,6 +28,7 @@ import {
 import Task from "@/models/Task";
 import TaskWorkEntry from "@/models/TaskWorkEntry";
 import { taskFormers, taskStarted } from "@/lib/tasks/workplanStore";
+import { SHOOT_PLAN_SOURCE, plannedRowsForDay, workRightsByStatus } from "@/lib/tasks/shootSessions";
 import User from "@/models/User";
 
 const fail = (error, fieldErrors) => ({ ok: false, error, ...(fieldErrors ? { fieldErrors } : {}) });
@@ -35,6 +36,7 @@ const str = (v) => (typeof v === "string" ? v : "");
 const SIGNED_OUT = "Your session has expired. Please sign in again.";
 const FIX = "แก้ไขรายการที่มีปัญหาก่อนบันทึก";
 const FORMER_ADD = "ผู้รับงานเดิม: แก้ไขหรือลบรายการที่มีอยู่ได้เท่านั้น";
+const LINKED = "แผนนี้สร้างจากนัดถ่าย · แก้ที่นัดถ่าย";
 
 const json = (v, fallback) => {
   try {
@@ -55,13 +57,17 @@ async function loadScope(formData) {
   if (!content) return { error: "That content item no longer exists." };
   const task = await findContentTask(project, content, str(formData.get("taskId")));
   if (!task) return { error: "That task no longer exists." };
+  // Round 57.1: Photo has no Work Plan any more (its old entries stay, unread).
+  if (task.type === "photo") return { error: "Task ประเภท Photo ไม่มี Work Plan" };
   const person = str(formData.get("person"));
   // Round 50: former people (handover) — Manager / superadmin may edit / delete their entries only.
   const formers = await taskFormers(task);
   const who = canWriteFor(person, { viewerId: viewer.idStr, fullAccess: !!viewer.isAdmin, people: workPlanPeople(task), formers });
   if (!who.ok) return { error: "บันทึกได้เฉพาะแผน/เวลาของตัวเอง (หรือ Manager บันทึกแทน)" };
   const user = await User.findById(person).select("name").lean();
-  return { viewer, project, task, person, personName: user?.name ?? "Unknown", onBehalf: who.onBehalf, former: who.former };
+  // Round 57.1: Production plan / log rights by status (enforced here, not only hidden).
+  const rights = workRightsByStatus(task.type, task.status, { fullAccess: !!viewer.isAdmin });
+  return { viewer, project, task, person, personName: user?.name ?? "Unknown", onBehalf: who.onBehalf, former: who.former, rights };
 }
 
 /** The person's saved entries of `kind` on `dates`, on EVERY task, with the task titles. */
@@ -112,6 +118,7 @@ export async function savePlansAction(formData) {
   const editId = raw.find((c) => c?.id) ? str(raw[0]?.id) : "";
   if (editId && raw.length !== 1) return fail("แก้ไขได้ครั้งละ 1 แผน");
   if (scope.former && !editId) return fail(FORMER_ADD);
+  if (!scope.rights.plan) return fail(scope.rights.planMessage);
 
   const errors = {};
   const cards = raw.map((c, i) => {
@@ -126,6 +133,7 @@ export async function savePlansAction(formData) {
     if (!mongoose.isValidObjectId(editId)) return fail("This plan no longer exists.");
     editing = await TaskWorkEntry.findOne({ _id: editId, task: scope.task._id, person: scope.person, kind: "plan" }).lean();
     if (!editing) return fail("This plan no longer exists.");
+    if (editing.source === SHOOT_PLAN_SOURCE) return fail(LINKED);
   }
 
   const existing = await personEntries(scope.person, "plan", [...new Set(cards.map((c) => c.date))]);
@@ -185,6 +193,7 @@ export async function saveLogsAction(formData) {
   if (note.length > NOTE_MAX) return fail(FIX, { note: `ไม่เกิน ${NOTE_MAX} ตัวอักษร` });
   const editId = str(formData.get("id"));
   if (scope.former && !editId) return fail(FORMER_ADD);
+  if (!scope.rights.log) return fail(scope.rights.logMessage);
   // Round 50: actual time only once the work has started (editing existing logs is fine).
   if (!editId && !(await taskStarted(scope.task))) return fail(notStartedMessage(scope.task.type));
 
@@ -239,8 +248,60 @@ export async function deleteWorkEntryAction(formData) {
   if (scope.error) return fail(scope.error);
   const id = str(formData.get("id"));
   if (!mongoose.isValidObjectId(id)) return fail("This entry no longer exists.");
+  const found = await TaskWorkEntry.findOne({ _id: id, task: scope.task._id, person: scope.person }).select("kind source").lean();
+  if (!found) return fail("This entry no longer exists.");
+  if (found.source === SHOOT_PLAN_SOURCE) return fail(LINKED);
+  if (found.kind === "plan" ? !scope.rights.plan : !scope.rights.log) return fail(found.kind === "plan" ? scope.rights.planMessage : scope.rights.logMessage);
   const entry = await TaskWorkEntry.findOneAndDelete({ _id: id, task: scope.task._id, person: scope.person }).lean();
   if (!entry) return fail("This entry no longer exists.");
   await logActivity(act(scope, { action: entry.kind === "plan" ? "plan_deleted" : "log_deleted", date: entry.date }));
+  return { ok: true };
+}
+
+/**
+ * "บันทึกตามแผน" (round 57.1): ONE click logs actual time = that day's planned
+ * ranges of the person (read here from the DB, never from the client). Only on a
+ * day with a linked (นัดถ่าย) plan; same rules as Log time (started, status
+ * rights, not in the future, no overlap with the person's logs on any task).
+ * Form: projectId, contentId, taskId, person, date.
+ */
+export async function logAsPlannedAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  if (scope.former) return fail(FORMER_ADD);
+  if (!scope.rights.log) return fail(scope.rights.logMessage);
+  if (!(await taskStarted(scope.task))) return fail(notStartedMessage(scope.task.type));
+  const today = bangkokDay(Date.now());
+  const date = str(formData.get("date"));
+  const plans = await TaskWorkEntry.find({ task: scope.task._id, person: scope.person, kind: "plan", date }).lean();
+  if (!plans.some((p) => p.source === SHOOT_PLAN_SOURCE)) return fail("วันนี้ไม่มีแผนจากนัดถ่าย");
+  const raw = plannedRowsForDay(plans, scope.person, date).map((r) => ({ date, mode: "range", ...r }));
+  if (!raw.length) return fail("วันนี้ไม่มีแผนที่ระบุเวลา");
+  const rows = [];
+  for (const r of raw) {
+    const p = parseEntry(r, { kind: "log", today });
+    if (p.error) return fail(p.error);
+    rows.push(p.value);
+  }
+  const existing = await personEntries(scope.person, "log", [date]);
+  const clash = checkLogs(rows, { existing }).find(Boolean);
+  if (clash) return fail(clash);
+  await TaskWorkEntry.insertMany(
+    rows.map((r) => ({
+      date: r.date,
+      mode: r.mode,
+      start: r.start,
+      end: r.end,
+      minutes: r.minutes,
+      note: "",
+      task: scope.task._id,
+      project: scope.project._id,
+      person: scope.person,
+      kind: "log",
+      onBehalf: scope.onBehalf,
+      createdBy: scope.viewer.id,
+    }))
+  );
+  await logActivity(act(scope, { action: "log_added", date, minutes: rows.reduce((t, r) => t + r.minutes, 0), asPlanned: true }));
   return { ok: true };
 }

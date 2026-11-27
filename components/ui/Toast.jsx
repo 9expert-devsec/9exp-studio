@@ -4,8 +4,12 @@
 // <Toaster /> (mounted once in the (app) layout) shows them bottom-center for ~4s.
 // A window event decouples callers from the mount point (no provider needed).
 // Announced politely (role="status"); errors assertively (role="alert").
+// Round 57.1: the stack is a manual popover, re-shown on every new toast, so it sits
+// in the browser's top layer ABOVE an open modal <dialog> (Task Detail, Edit Task).
+// As a plain fixed element it was painted under the dialog and its backdrop — e.g.
+// the "คัดลอกแล้ว" toast of "คัดลอก File Location" was never visible.
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CircleAlert, CircleCheck, X } from "lucide-react";
 
 const EVENT = "studio:toast";
@@ -41,8 +45,26 @@ export function Toaster() {
 
   const dismiss = (id) => setItems((cur) => cur.filter((x) => x.id !== id));
 
+  // Newest toast → (re)enter the top layer last, i.e. above any modal dialog.
+  const ref = useRef(null);
+  const lastId = items.at(-1)?.id ?? 0;
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el?.showPopover) return;
+    try {
+      if (el.matches(":popover-open")) el.hidePopover();
+      if (lastId) el.showPopover();
+    } catch {
+      /* popover unsupported: stays a plain fixed element */
+    }
+  }, [lastId]);
+
   return (
-    <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4">
+    <div
+      ref={ref}
+      popover="manual"
+      className="pointer-events-none fixed inset-x-0 top-auto bottom-4 z-[60] m-0 flex h-auto w-auto max-w-none flex-col items-center gap-2 overflow-visible border-0 bg-transparent px-4 py-0 [&:not(:popover-open)]:hidden"
+    >
       {items.map((t) => {
         const error = t.tone === "error";
         const Icon = error ? CircleAlert : CircleCheck;

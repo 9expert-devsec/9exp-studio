@@ -42,8 +42,10 @@ const TaskSchema = new mongoose.Schema(
     // null — lib/tasks/clipFlow.js), workLevel, contentReviewer, videoReviewer; graphic: platform, workType, items,
     // fileLocation, photos[{ url, publicId, width, height }], brief, referenceUrl,
     // related, workLevel, contentReviewer, designReviewer; photo: photoType,
-    // related, editor, shoot). Production / Photo `shoot` (round 48): { date
-    // "YYYY-MM-DD", time "HH:mm", location } or null; Production also keeps
+    // related, editor). Production `shootSessions` (round 57.1, lib/tasks/shootSessions.js):
+    // [{ _id, date "YYYY-MM-DD", startTime "HH:mm", endTime "HH:mm"|null, location }];
+    // the older single `shoot` { date, time, location } (round 48) is read as one
+    // session until converted (Photo's stays stored, unread); Production also keeps
     // fileLocation (set by "ลงการ์ดแล้ว"). Graphic File Location / Photo Folder Name + Location live
     // on the TaskFolder. {} = no details yet.
     details: { type: mongoose.Schema.Types.Mixed, default: {} },

@@ -1,6 +1,7 @@
 "use client";
 
 import { createContext, use, useEffect, useRef } from "react";
+import { lockPageScroll, useCloseWhenHidden } from "./dialogLifecycle";
 
 // Right-side drawer on the native <dialog> element, like Modal: showModal() gives
 // the focus trap, inert background and Escape for free. ~520px wide, full width on
@@ -15,6 +16,10 @@ import { createContext, use, useEffect, useRef } from "react";
 //
 // Children mount only while open (form state resets each time) and close the drawer
 // with `useDrawerClose()`.
+//
+// Round 57.1: when the route is hidden by <Activity> (or the drawer unmounts) the
+// native dialog leaves the modal state silently — a hidden modal dialog kept the
+// whole page inert (components/ui/dialogLifecycle.js).
 const FIRST_FIELD = "input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled])";
 
 const DrawerClose = createContext(() => {});
@@ -31,6 +36,7 @@ const SIZE = {
 
 export default function Drawer({ open, onClose, labelledBy, returnFocusId, size = "default", closeOnBackdrop = false, children }) {
   const ref = useRef(null);
+  const silentRef = useCloseWhenHidden(ref);
 
   useEffect(() => {
     const dialog = ref.current;
@@ -48,11 +54,9 @@ export default function Drawer({ open, onClose, labelledBy, returnFocusId, size 
   const unlockRef = useRef(null);
   useEffect(() => {
     if (!open) return;
-    const root = document.documentElement;
-    const prev = root.style.overflow;
-    root.style.overflow = "hidden";
+    const release = lockPageScroll();
     unlockRef.current = () => {
-      root.style.overflow = prev;
+      release();
       unlockRef.current = null;
     };
     return () => unlockRef.current?.();
@@ -65,6 +69,13 @@ export default function Drawer({ open, onClose, labelledBy, returnFocusId, size 
       ref={ref}
       aria-labelledby={labelledBy}
       onClose={() => {
+        // A silent close (hidden by Activity / unmounting): not the user's close. Its
+        // scroll lock is released by the effect cleanup (this event may arrive after
+        // a re-show, e.g. StrictMode's remount, so it must not release the new lock).
+        if (silentRef.current) {
+          silentRef.current = false;
+          return;
+        }
         unlockRef.current?.();
         if (open) onClose?.();
         if (returnFocusId) document.getElementById(returnFocusId)?.focus();

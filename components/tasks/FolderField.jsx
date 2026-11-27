@@ -15,8 +15,9 @@
 // folder also hands its row to the caller (to fill the folder name / location).
 
 import { useState } from "react";
-import { Check, Copy, FolderOpen, Lock } from "lucide-react";
+import { FolderOpen, Lock } from "lucide-react";
 import Combobox from "@/components/ui/Combobox";
+import { CopyIconButton } from "@/components/ui/CopyButton";
 import { FieldError, label } from "@/components/projects/ProjectForm";
 
 /** How many tasks will share the folder after saving (for the "Shared by N tasks" hint). */
@@ -32,27 +33,9 @@ const box = "flex min-h-11 w-full items-center gap-2 rounded-[10px] border borde
 const textButton =
   "shrink-0 rounded-[8px] px-2.5 py-1.5 text-xs font-semibold text-accent-fg hover:bg-card focus-visible:outline-2 focus-visible:outline-brand-500";
 
+/** Round 57.1: the shared copy behaviour (components/ui/CopyButton.jsx). */
 function CopyId({ folderId }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(folderId);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked: the ID is still selectable */
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label={copied ? "Folder ID copied" : `Copy Folder ID ${folderId}`}
-      className="flex size-8 shrink-0 items-center justify-center rounded-[8px] text-fg-muted transition-colors hover:bg-card hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
-    >
-      {copied ? <Check className="size-4 text-success" aria-hidden="true" /> : <Copy className="size-4" aria-hidden="true" />}
-    </button>
-  );
+  return <CopyIconButton value={folderId} label={`Folder ID ${folderId}`} size="md" className="hover:bg-card" />;
 }
 
 /** Choose list (full width). A picked folder shows as a row with "Choose another". */

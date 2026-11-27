@@ -2,7 +2,8 @@
 
 // Create / Edit Task — Step 2 "Task Detail" for Production (Figma 208:185, round
 // 38). Controlled by the drawer (values + setField). Cards: Brief & References ·
-// Related · Roles & Assignments · Schedule a Shoot. Nothing is required. The save
+// Related · Roles & Assignments · ช่วงเวลางาน · นัดถ่าย (round 57.1: a list of shoot
+// days, components/tasks/ShootFields.jsx). Nothing is required. The save
 // re-validates everything (lib/tasks/details.js parseProductionDetails).
 //   - Videographer: one or more accounts whose role may do Production; the FIRST
 //     one becomes the task's assignee.
@@ -16,7 +17,7 @@ import RelatedPicker from "@/components/tasks/RelatedPicker";
 import RichTextEditor from "@/components/ui/RichTextEditor";
 import { FieldError, label } from "@/components/projects/ProjectForm";
 import { PRODUCTION_PEOPLE_MAX } from "@/lib/tasks/production";
-import ShootFields from "@/components/tasks/ShootFields";
+import ShootSessionsFields from "@/components/tasks/ShootFields";
 
 /** Empty Step 2 values (also the shape posted as `details` JSON). */
 export const emptyProductionDetails = () => ({
@@ -30,10 +31,8 @@ export const emptyProductionDetails = () => ({
   startTime: "",
   dueDate: "",
   dueTime: "",
-  // Optional "นัดถ่าย" (round 48): all three or none.
-  shootDate: "",
-  shootTime: "",
-  shootLocation: "",
+  // Round 57.1: "นัดถ่าย" sessions [{ _id, date, startTime, endTime, location }].
+  shootSessions: [],
 });
 
 /**
@@ -114,7 +113,7 @@ export default function ProductionDetailsStep({ values, setField, errors, projec
       </Section>
 
       {/* Stacked like Graphic: date + time side by side need the full drawer width. */}
-      <Section id="sec-production-schedule" title="Schedule a Shoot" subtitle="When the shoot starts and when it is due.">
+      <Section id="sec-production-schedule" title="ช่วงเวลางาน" subtitle="ใช้คำนวณกำหนดส่งและแสดงในปฏิทิน">
         <div className="flex flex-col gap-4">
           <DateTimeField
             id="production-start"
@@ -139,8 +138,8 @@ export default function ProductionDetailsStep({ values, setField, errors, projec
           />
         </div>
       </Section>
-      <Section id="sec-production-shoot" title="นัดถ่าย" subtitle="ไม่บังคับ · วัน เวลา และสถานที่ถ่าย (ตั้งหรือเลื่อนได้ภายหลังจาก Task Detail)">
-        <ShootFields id="production-shoot" values={values} setField={setField} errors={errors} />
+      <Section id="sec-production-shoot" title="นัดถ่าย" subtitle="วัน เวลา และสถานที่ถ่ายจริง เพิ่มได้หลายวัน">
+        <ShootSessionsFields id="production-shoot" rows={values.shootSessions ?? []} onChange={(rows) => setField("shootSessions", rows)} errors={errors} />
       </Section>
     </div>
   );

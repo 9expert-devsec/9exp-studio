@@ -36,7 +36,6 @@ import {
   Clapperboard,
   Clock,
   Hourglass,
-  Copy,
   ExternalLink,
   Eye,
   FileText,
@@ -72,6 +71,9 @@ import StatusMoveForm from "@/components/tasks/StatusMoveForm";
 import ReviewDialog from "@/components/tasks/ReviewDialog";
 import ReviewsTab from "@/components/tasks/ReviewsTab";
 import WorkPlanTab from "@/components/tasks/WorkPlanTab";
+import { CopyIconButton, CopyTextButton } from "@/components/ui/CopyButton";
+import { sessionTimeLabel } from "@/lib/tasks/shootSessions";
+import { formatThaiDay } from "@/lib/projects/format";
 import TypeStatusCard, { ShootDialog } from "@/components/tasks/TypeStatusCard";
 import Modal from "@/components/ui/Modal";
 import {
@@ -299,27 +301,9 @@ function PanelBody({ panel }) {
 
 // ── Left column ───────────────────────────────────────────────────────────
 
+/** Round 57.1: the shared copy behaviour (components/ui/CopyButton.jsx). */
 function CopyButton({ value, label }) {
-  const [copied, setCopied] = useState(false);
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(value);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      /* clipboard blocked: the value is still selectable */
-    }
-  };
-  return (
-    <button
-      type="button"
-      onClick={copy}
-      aria-label={copied ? `${label} copied` : `Copy ${label}`}
-      className="flex size-7 shrink-0 items-center justify-center rounded-[8px] text-fg-muted hover:bg-card-inset hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
-    >
-      {copied ? <Check className="size-3.5 text-success" aria-hidden="true" /> : <Copy className="size-3.5" aria-hidden="true" />}
-    </button>
-  );
+  return <CopyIconButton value={value} label={label} />;
 }
 
 function Row({ icon: Icon, label, children }) {
@@ -605,6 +589,30 @@ function InfoColumn({ panel }) {
         {panel.due.label && (
           <Row icon={CalendarClock} label={panel.due.title}>
             {panel.due.label}
+          </Row>
+        )}
+        {panel.type === "production" && (
+          // Round 57.1: one line per นัดถ่าย session — date · time range · location.
+          <Row icon={Camera} label="นัดถ่าย">
+            {panel.shootSessions.length ? (
+              <ul className="flex flex-col gap-1">
+                {panel.shootSessions.map((x) => (
+                  <li key={x._id}>
+                    <span className="font-medium">{formatThaiDay(x.date, { weekday: false })}</span>
+                    <span className="text-fg-muted"> · </span>
+                    {sessionTimeLabel(x)}
+                    {x.location && (
+                      <>
+                        <span className="text-fg-muted"> · </span>
+                        {x.location}
+                      </>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <span className="text-fg-muted">ยังไม่ได้นัดถ่าย</span>
+            )}
           </Row>
         )}
         {panel.folderId && (
@@ -1021,20 +1029,7 @@ function PrimaryActionButton({ panel, button, onReview }) {
   const [pending, startTransition] = useTransition();
   const [dialog, setDialog] = useState(false);
   if (button.kind === "copy") {
-    const copy = async () => {
-      try {
-        await navigator.clipboard.writeText(button.value);
-        toast("คัดลอกแล้ว");
-      } catch {
-        toast("Couldn't copy — select the path and copy it by hand.", { tone: "error" });
-      }
-    };
-    return (
-      <button type="button" onClick={copy} disabled={!!button.disabled} className={buttonClass("outline", "w-full")}>
-        <Copy className="size-4" aria-hidden="true" />
-        {button.label}
-      </button>
-    );
+    return <CopyTextButton value={button.value} label={button.label} disabled={!!button.disabled} className={buttonClass("outline", "w-full")} />;
   }
   if (button.kind === "review") {
     return (
@@ -1131,7 +1126,8 @@ function TaskTabs({ panel, tab, setTab, focus }) {
   const reviewCount = panel.review?.mine.length ?? 0;
   const tabs = [
     { key: "activity", label: "Activity" },
-    { key: "work_plan", label: "Work Plan" },
+    // Round 57.1: no Work Plan for Photo (panel.workPlan is null).
+    ...(panel.workPlan ? [{ key: "work_plan", label: "Work Plan" }] : []),
     { key: "reviews", label: reviewCount ? `Reviews (${reviewCount})` : "Reviews" },
   ];
   const onKeyDown = (e) => {

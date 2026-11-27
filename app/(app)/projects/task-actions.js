@@ -37,7 +37,7 @@ import { buildTaskCopy } from "@/lib/tasks/duplicate";
 import { deleteActivity, editEntries, editPeopleKeys, loadActivityPage, logActivity } from "@/lib/tasks/activity";
 import { peopleNames, resolvePresenters } from "@/lib/tasks/externalPeople";
 import { searchRelated } from "@/lib/msdb";
-import { escapeRegex } from "@/lib/projects/rules";
+import { escapeRegex, parseBangkokDateTime } from "@/lib/projects/rules";
 import { assetRows } from "@/lib/tasks/assetRows";
 import { parseTaskDetails, removedPhotoIds } from "@/lib/tasks/details";
 import { createTaskFolder, discardFolder } from "@/lib/tasks/folderCounter";
@@ -46,7 +46,11 @@ import { needsSubmit, reviewMoveOpts } from "@/lib/tasks/reviews";
 import { deleteReviews, withdrawOpenCycle } from "@/lib/tasks/reviewStore";
 import { deleteComments } from "@/lib/tasks/comments";
 import { deleteWorkEntries } from "@/lib/tasks/workplanStore";
-import { flowAction, parseArticlePublish, parsePostLinks, parseShoot, postLinksComplete } from "@/lib/tasks/statusView";
+import { flowAction, parseArticlePublish, parsePostLinks, postLinksComplete } from "@/lib/tasks/statusView";
+import mongoose from "mongoose";
+import { bangkokDay } from "@/lib/tasks/workplan";
+import { AUTO_DUE_TIME, autoDueDay, autoStatusForSessions, isHexId, parseShootSessions, sessionsFromDetails } from "@/lib/tasks/shootSessions";
+import { syncShootPlans } from "@/lib/tasks/shootPlanStore";
 import { recheckAssetDependents, recheckAssetTask, readinessOf } from "@/lib/tasks/assetFlowStore";
 import { draftExitTarget } from "@/lib/tasks/assets";
 import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
@@ -119,6 +123,31 @@ async function applyFolderTexts(type, folderId, project, set, details) {
 const siblingTasks = (project, content) =>
   Task.find({ content: content._id, project: project._id }).select("_id number sortOrder").lean();
 
+/**
+ * Round 57.1 — Production นัดถ่าย side effects of a save, decided BEFORE the write
+ * (lib/tasks/shootSessions.js): Due empty → the last session's day at 18:00
+ * (never overwrites a set Due); ยังไม่เริ่ม + first session(s) → นัดถ่ายแล้ว. Mutates
+ * `values.dueAt`; returns the automatic status (or null).
+ * @param {{ type: string, status: string, details?: object }} before  the stored task (create: details {})
+ * @param {{ details: object, startAt: Date|null, dueAt: Date|null }} values
+ */
+function shootSideEffects(before, values) {
+  if (before.type !== "production") return null;
+  const sessions = values.details?.shootSessions ?? [];
+  const day = autoDueDay({ sessions, hasDue: !!values.dueAt, startDay: bangkokDay(values.startAt) });
+  if (day) values.dueAt = parseBangkokDateTime(day, AUTO_DUE_TIME);
+  return autoStatusForSessions(before.type, before.status, sessionsFromDetails(before.details).length, sessions.length);
+}
+
+/** The System status_changed entry of an automatic นัดถ่ายแล้ว (actor null = System). */
+const shootStatusEntry = (task, project, from, to, n) => ({
+  task: task._id,
+  project: project._id,
+  actor: null,
+  type: "status_changed",
+  data: { from, to, shootSessions: n },
+});
+
 /** Best-effort Cloudinary cleanup (never blocks or fails the action). */
 async function deletePhotos(publicIds) {
   await Promise.all(publicIds.map((id) => deleteTaskPhoto(id)));
@@ -152,6 +181,8 @@ export async function createTaskAction(formData) {
   const { folder: folderSpec, ...more } = extra.values ?? { details: {}, assignee: null, startAt: null, dueAt: null };
   // Production: new external presenter names → saved ExternalPerson ids (reused by nameKey).
   if (type === "production" && extra.values) more.details.presenters = await resolvePresenters(more.details.presenters, viewer.id);
+  // Round 57.1: sessions → Due fill + ยังไม่เริ่ม → นัดถ่ายแล้ว.
+  const autoStatus = extra.values ? shootSideEffects({ type, status, details: {} }, more) : null;
 
   // Shared folder (graphic → G, photo → P; rounds 36–37; lib/tasks/folders.js).
   // A Folder ID is issued ONLY for an explicit "New Folder" in Step 2: the ID
@@ -185,7 +216,7 @@ export async function createTaskAction(formData) {
       content: content._id,
       title,
       type,
-      status,
+      status: autoStatus ?? status,
       assetStatus: null, // post: derived at read time (lib/tasks/assets.js), never stored
       assignee: more.assignee,
       startAt: more.startAt,
@@ -205,6 +236,9 @@ export async function createTaskAction(formData) {
     return fail("Could not number this task — please try again.");
   }
   await logActivity({ task: task._id, project: project._id, actor: viewer.id, type: "created", data: {} });
+  if (autoStatus) await logActivity(shootStatusEntry(task, project, status, autoStatus, more.details.shootSessions.length));
+  // Round 57.1: one linked Work Plan block per session × Studio person.
+  if (type === "production") await syncShootPlans(task, viewer.id);
   // Round 45: a Clip linked to a Production that is already done → รอตัดต่อ.
   await applySourceReadyForClip(task);
 
@@ -248,10 +282,14 @@ export async function updateTaskAction(formData) {
   let textsBefore = null;
   let textsAfter = null;
   let issuedFolderId = null;
+  let autoStatus = null;
   if (extra.values) {
     const { folder, ...values } = extra.values;
     // Production: new external presenter names → saved ExternalPerson ids (reused by nameKey).
     if (task.type === "production") values.details.presenters = await resolvePresenters(values.details.presenters, viewer.id);
+    // Round 57.1: sessions → Due fill + ยังไม่เริ่ม → นัดถ่ายแล้ว (status in the same write).
+    autoStatus = shootSideEffects(task, values);
+    if (autoStatus) Object.assign(values, { status: autoStatus, statusBeforeHold: null });
     Object.assign(set, values);
     if (folder) {
       textsBefore = await currentFolderTexts(task);
@@ -284,6 +322,15 @@ export async function updateTaskAction(formData) {
   const peopleKeys = editPeopleKeys(before, after);
   const names = peopleKeys.length ? await peopleNames(peopleKeys) : undefined;
   await logActivity(editEntries(before, after, { actor: viewer.id, names }));
+  if (task.type === "production" && extra.values) {
+    if (autoStatus) {
+      await logActivity(shootStatusEntry(task, project, task.status, autoStatus, set.details.shootSessions.length));
+      await recomputeRollups({ projectId: project._id, contentId: content._id });
+      await recheckAssetDependents([task._id]);
+    }
+    // Round 57.1: linked plans follow sessions AND people (added / removed person).
+    await syncShootPlans({ ...task, ...set }, viewer.id);
+  }
 
   // Photos removed in the form are deleted from Cloudinary only now, after the
   // save (so Cancel never loses a saved photo).
@@ -451,10 +498,12 @@ export async function runFlowAction(formData) {
 }
 
 /**
- * Set / move the shoot appointment (Production, Photo): details.shoot = { date,
- * time, location } (all required). `advance=1` (Production "ตั้งวันถ่ายทำ" at
- * ยังไม่เริ่ม) also moves the status to นัดถ่ายแล้ว. Activity: old → new.
- * Form: projectId, contentId, taskId, shootDate, shootTime, shootLocation, advance?
+ * Production "ตั้งวันถ่ายทำ" / "แก้ไขนัดถ่าย" (round 57.1): saves the WHOLE
+ * session list (details.shootSessions, at least one; lib/tasks/shootSessions.js).
+ * Same side effects as Edit Task: Due empty → the last session's day 18:00;
+ * ยังไม่เริ่ม → นัดถ่ายแล้ว (automatic on the first session, or `advance=1` from the
+ * primary button when sessions already existed); the linked Work Plan follows.
+ * Form: projectId, contentId, taskId, shootSessions (JSON rows), advance?
  */
 export async function setShootAction(formData) {
   const scope = await loadScope(formData);
@@ -462,40 +511,47 @@ export async function setShootAction(formData) {
   const { viewer, project, content } = scope;
   const task = await findContentTask(project, content, str(formData.get("taskId")));
   if (!task) return fail(TASK_NOT_FOUND);
-  if (task.type !== "production" && task.type !== "photo") return fail("This task type has no shoot appointment.");
+  if (task.type !== "production") return fail("This task type has no shoot appointment.");
   if (!canChangeTaskStatus(viewer, project, task)) return fail(project.status === "cancelled" ? PROJECT_CANCELLED : STATUS_DENIED);
 
-  const parsed = parseShoot(
-    { date: str(formData.get("shootDate")), time: str(formData.get("shootTime")), location: str(formData.get("shootLocation")) },
-    { required: true }
-  );
-  if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
-  const shoot = parsed.value;
-
-  const set = { "details.shoot": shoot, updatedBy: viewer.id };
-  const a = str(formData.get("advance")) === "1" ? flowAction(task.type, "set_shoot") : null;
-  if (a) {
-    if (task.status !== a.from) return fail("This task's status just changed. Reload and try again.");
-    const move = canTransition(task.type, task.status, a.to, moveOpts(viewer, project, task));
-    if (!move.ok) return fail(move.reason);
-    Object.assign(set, { status: a.to, statusBeforeHold: null });
+  let raw;
+  try {
+    raw = JSON.parse(str(formData.get("shootSessions")));
+  } catch {
+    raw = null;
   }
+  if (!Array.isArray(raw) || !raw.length) return fail(CHECK_FIELDS, { shootSessions: "เพิ่มอย่างน้อย 1 วันถ่าย" });
+  const parsed = parseShootSessions(raw, {
+    storedIds: sessionsFromDetails(task.details).map((x) => x._id).filter(isHexId),
+    newId: () => new mongoose.Types.ObjectId().toHexString(),
+  });
+  if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
+
+  const details = { ...(task.details ?? {}), shootSessions: parsed.value };
+  delete details.shoot; // converted (round 57.1)
+  const values = { details, startAt: task.startAt ?? null, dueAt: task.dueAt ?? null };
+  let to = shootSideEffects(task, values);
+  const a = str(formData.get("advance")) === "1" ? flowAction(task.type, "set_shoot") : null;
+  if (!to && a && task.status === a.from) to = a.to;
+  if (to) {
+    const move = canTransition(task.type, task.status, to, moveOpts(viewer, project, task));
+    if (!move.ok) return fail(move.reason);
+  }
+  const set = { details, updatedBy: viewer.id, ...(values.dueAt !== (task.dueAt ?? null) ? { dueAt: values.dueAt } : {}), ...(to ? { status: to, statusBeforeHold: null } : {}) };
   const res = await Task.updateOne({ _id: task._id, content: content._id, project: project._id, status: task.status }, { $set: set });
   if (!res.matchedCount) return fail("This task's status just changed. Reload and try again.");
 
-  const base = { task: task._id, project: project._id, actor: viewer.id };
-  const prev = task.details?.shoot ?? null;
-  const same = !!prev && prev.date === shoot.date && prev.time === shoot.time && prev.location === shoot.location;
-  await logActivity(
-    [
-      same ? null : { ...base, type: "shoot_set", data: { from: prev, to: shoot } },
-      a ? { ...base, type: "status_changed", data: { from: task.status, to: a.to, action: "set_shoot" } } : null,
-    ].filter(Boolean)
-  );
-  if (a) {
+  await logActivity(editEntries(task, { ...task, ...set }, { actor: viewer.id }));
+  if (to) {
+    await logActivity(
+      a && to === a.to && autoStatusForSessions(task.type, task.status, sessionsFromDetails(task.details).length, parsed.value.length) == null
+        ? { task: task._id, project: project._id, actor: viewer.id, type: "status_changed", data: { from: task.status, to, action: "set_shoot" } }
+        : shootStatusEntry(task, project, task.status, to, parsed.value.length)
+    );
     await recomputeRollups({ projectId: project._id, contentId: content._id });
     await recheckAssetDependents([task._id]); // round 49 (every status write)
   }
+  await syncShootPlans({ ...task, ...set }, viewer.id);
   refresh();
   return { ok: true };
 }
@@ -685,6 +741,8 @@ export async function duplicateTaskAction(formData) {
   await logActivity({ task: copy._id, project: project._id, actor: viewer.id, type: "created", data: { duplicatedFrom: task.title } });
   // Round 45: the copy keeps the Related Production link and starts at รอ Source.
   await applySourceReadyForClip(copy);
+  // Round 57.1: a Production copy keeps its sessions → its own linked plans.
+  if (copy.type === "production") await syncShootPlans(copy, viewer.id);
 
   // Right after the original: (re)write the whole content's order.
   const ordered = sortByOrder(await siblingTasks(project, content)).map((t) => t._id.toString());

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef } from "react";
+import { useCloseWhenHidden } from "./dialogLifecycle";
 import { X } from "lucide-react";
 
 // Accessible modal on the native <dialog> element: showModal() gives a focus trap,
@@ -12,6 +13,8 @@ import { X } from "lucide-react";
 // Initial focus (showModal() alone would focus the ✕ close button): an element marked
 // `data-autofocus` (e.g. the safe action of a confirm dialog), else the first real
 // field. React's autoFocus does not work here: it runs before the dialog opens.
+// Round 57.1: hidden by <Activity> or unmounted → the native dialog leaves the modal
+// state silently (a hidden modal dialog kept the page inert; ./dialogLifecycle.js).
 const FIRST_FIELD =
   "input:not([type=hidden]):not([type=file]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])";
 
@@ -19,6 +22,7 @@ const WIDTH = { sm: "max-w-lg", md: "max-w-[35rem]" }; // md ≈ 560px (round 46
 
 export default function Modal({ open, onClose, title, description, closeOnBackdrop = false, size = "sm", children }) {
   const ref = useRef(null);
+  const silentRef = useCloseWhenHidden(ref);
   const titleId = useId();
   const descId = useId();
 
@@ -36,7 +40,13 @@ export default function Modal({ open, onClose, title, description, closeOnBackdr
   return (
     <dialog
       ref={ref}
-      onClose={onClose}
+      onClose={() => {
+        if (silentRef.current) {
+          silentRef.current = false;
+          return;
+        }
+        onClose?.();
+      }}
       // The dialog box is fully covered by its padded child, so a click whose target
       // is the <dialog> itself landed on the backdrop.
       onClick={closeOnBackdrop ? (e) => e.target === e.currentTarget && onClose?.() : undefined}

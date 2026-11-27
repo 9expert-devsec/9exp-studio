@@ -21,7 +21,6 @@ import FolderField, { folderShareCount } from "@/components/tasks/FolderField";
 import PersonPicker from "@/components/tasks/PersonPicker";
 import RelatedPicker from "@/components/tasks/RelatedPicker";
 import { FOLDER_LOCATION_MAX, FOLDER_NAME_MAX } from "@/lib/tasks/folders";
-import ShootFields from "@/components/tasks/ShootFields";
 
 /** Empty Step 2 values (also the shape posted as `details` JSON). */
 export const emptyPhotoDetails = () => ({
@@ -36,10 +35,7 @@ export const emptyPhotoDetails = () => ({
   startTime: "",
   dueDate: "", // Output Date
   dueTime: "",
-  // Optional "นัดถ่าย" (round 48): all three or none.
-  shootDate: "",
-  shootTime: "",
-  shootLocation: "",
+  // Round 57.1: no "นัดถ่าย" block for Photo (Shoot Date is the Timeline's start).
 });
 
 /**
@@ -193,9 +189,6 @@ export default function PhotoDetailsStep({ values, setField, errors, projectId, 
             hint="Time defaults to 18:00 (Bangkok)."
           />
         </div>
-      </Section>
-      <Section id="sec-photo-shoot" title="นัดถ่าย" subtitle="ไม่บังคับ · วัน เวลา และสถานที่ถ่าย (ตั้งหรือเลื่อนได้ภายหลังจาก Task Detail)">
-        <ShootFields id="photo-shoot" values={values} setField={setField} errors={errors} />
       </Section>
     </div>
   );

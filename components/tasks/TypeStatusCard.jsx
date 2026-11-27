@@ -38,10 +38,11 @@ import { invalidateTaskPanel } from "@/components/tasks/panelCache";
 import ReviewDialog from "@/components/tasks/ReviewDialog";
 import PlatformIcon from "@/components/tasks/PlatformIcon";
 import { PostLinksDialog, PublishArticleDialog } from "@/components/tasks/PublishDialogs";
-import ShootFields from "@/components/tasks/ShootFields";
+import ShootSessionsFields, { newSessionRow, sessionRowsPayload } from "@/components/tasks/ShootFields";
 import { buttonClass } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
+import { CopyTextButton } from "@/components/ui/CopyButton";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
 
 const ICON = {
@@ -134,7 +135,6 @@ function ActionCard({ panel, action, onReview }) {
       <p title={isCopy || action.truncateHint ? action.button?.value || action.hint : undefined} className={`text-xs text-fg-muted ${action.truncateHint ? "truncate" : ""}`}>
         {action.hint}
       </p>
-      {action.link && <ShootLink panel={panel} label={action.link.label} />}
     </div>
   );
 }
@@ -162,14 +162,6 @@ function ActionButton({ panel, button, outline, onReview }) {
 
   const onClick = async () => {
     switch (button.actionId) {
-      case "copy":
-        try {
-          await navigator.clipboard.writeText(button.value);
-          toast("คัดลอกแล้ว");
-        } catch {
-          toast("Couldn't copy — select the path and copy it by hand.", { tone: "error" });
-        }
-        return;
       case "review":
         onReview?.(button.section);
         return;
@@ -191,6 +183,8 @@ function ActionButton({ panel, button, outline, onReview }) {
     }
   };
 
+  // Round 57.1: "คัดลอก File Location" — the shared copy feedback (check + "คัดลอกแล้ว").
+  if (button.actionId === "copy") return <CopyTextButton value={button.value} label={button.label} disabled={!!button.disabled} className={cls} />;
   // "เปิดโพสต์": one platform opens directly, several open a small menu.
   if (button.actionId === "open_posts" && (button.links?.length ?? 0) > 1) return <OpenPostsMenu button={button} className={cls} />;
   const icon =
@@ -249,26 +243,14 @@ function OpenPostsMenu({ button, className }) {
   );
 }
 
-/** Photo ยังไม่เริ่ม without an appointment: "ตั้งวันนัดถ่าย" (no status change). */
-function ShootLink({ panel, label: text }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <>
-      <button type="button" onClick={() => setOpen(true)} className="self-start rounded text-xs font-semibold text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
-        {text}
-      </button>
-      {open && <ShootDialog panel={panel} open onClose={() => setOpen(false)} />}
-    </>
-  );
-}
-
 /**
- * "ตั้งวันถ่ายทำ" / "เลื่อนวันนัดถ่าย" (an appointment exists). `advance`: also move
- * Production ยังไม่เริ่ม → นัดถ่ายแล้ว (the primary button). Pre-filled from panel.shoot.
+ * Production "ตั้งวันถ่ายทำ" / "แก้ไขนัดถ่าย" (round 57.1): the WHOLE session list
+ * (at least one). `advance`: the primary button at ยังไม่เริ่ม (→ นัดถ่ายแล้ว; the
+ * first session also moves it automatically). Pre-filled from panel.shootSessions.
  */
 export function ShootDialog({ panel, open, onClose, advance = false }) {
-  const s = panel.shoot;
-  const title = s && !advance ? "เลื่อนวันนัดถ่าย" : "ตั้งวันถ่ายทำ";
+  const has = (panel.shootSessions ?? []).length > 0;
+  const title = has && !advance ? "แก้ไขนัดถ่าย" : "ตั้งวันถ่ายทำ";
   return (
     <Modal open={open} onClose={onClose} title={title} description={panel.title} size="md">
       <ShootForm panel={panel} advance={advance} onDone={onClose} />
@@ -277,8 +259,10 @@ export function ShootDialog({ panel, open, onClose, advance = false }) {
 }
 
 function ShootForm({ panel, advance, onDone }) {
-  const s = panel.shoot ?? {};
-  const [values, setValues] = useState({ shootDate: s.date ?? "", shootTime: s.time ?? "", shootLocation: s.location ?? "" });
+  const [rows, setRows] = useState(() => {
+    const saved = (panel.shootSessions ?? []).map((x) => ({ key: x._id, _id: x._id, date: x.date, startTime: x.startTime, endTime: x.endTime ?? "", location: x.location ?? "" }));
+    return saved.length ? saved : [newSessionRow()];
+  });
   const [errors, setErrors] = useState({});
   const [formError, setFormError] = useState("");
   const [pending, startTransition] = useTransition();
@@ -286,7 +270,7 @@ function ShootForm({ panel, advance, onDone }) {
     e.preventDefault();
     setFormError("");
     const fd = ids(panel);
-    for (const [k, val] of Object.entries(values)) fd.set(k, val);
+    fd.set("shootSessions", JSON.stringify(sessionRowsPayload(rows)));
     if (advance) fd.set("advance", "1");
     startTransition(async () => {
       const res = await setShootAction(fd);
@@ -302,7 +286,7 @@ function ShootForm({ panel, advance, onDone }) {
   };
   return (
     <form onSubmit={save} noValidate className="flex flex-col gap-5">
-      <ShootFields id="shoot-dialog" values={values} setField={(f, val) => setValues((x) => ({ ...x, [f]: val }))} errors={errors} required />
+      <ShootSessionsFields id="shoot-dialog" rows={rows} onChange={setRows} errors={errors} />
       {formError && <p role="alert" className="text-sm text-danger">{formError}</p>}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <button type="button" onClick={onDone} className={buttonClass("outline")}>Cancel</button>

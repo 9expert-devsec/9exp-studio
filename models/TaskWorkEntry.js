@@ -23,6 +23,13 @@ const TaskWorkEntrySchema = new mongoose.Schema(
     note: { type: String, default: "" }, // logs: work note
     movedFrom: { type: String, default: null }, // plans
     onBehalf: { type: Boolean, default: false }, // written by Manager / superadmin for the person
+    // Round 57.1: a plan made FROM a Production shoot session (lib/tasks/shootSessions.js).
+    // source "shootSession" + the session's _id + its day part (0, or 1 = the
+    // after-midnight half of an overnight session). Kept in sync by the task save
+    // (lib/tasks/shootPlanStore.js); people can't edit / delete it. null = hand-made.
+    source: { type: String, default: null },
+    sessionId: { type: String, default: null },
+    sessionPart: { type: Number, default: null },
     createdBy: { type: ObjectId, ref: "User", required: true },
     updatedBy: { type: ObjectId, ref: "User", default: null },
   },
