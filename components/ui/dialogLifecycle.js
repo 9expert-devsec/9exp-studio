@@ -24,7 +24,7 @@ import { useLayoutEffect, useRef } from "react";
  * @param {React.RefObject<HTMLDialogElement>} ref
  * @returns {React.RefObject<boolean>} true while a close is silent (skip onClose)
  */
-export function useCloseWhenHidden(ref) {
+export function useCloseWhenHidden(ref, key = null) {
   const silentRef = useRef(false);
   useLayoutEffect(() => {
     const dialog = ref.current;
@@ -34,9 +34,18 @@ export function useCloseWhenHidden(ref) {
         dialog.close();
       }
     };
-  }, [ref]);
+    // `key` changes when the component swaps its <dialog> element (Modal's portal).
+  }, [ref, key]);
   return silentRef;
 }
+
+/**
+ * Round 58.1: is this `close` event the dialog's OWN? React 19 propagates the
+ * non-bubbling `close` / `cancel` events of a <dialog> through the React tree
+ * (only scroll / scrollend stay on the target), so a Modal closed inside a Drawer
+ * also ran the Drawer's onClose and closed it (Create Task → Select assets → Done).
+ */
+export const isOwnDialogEvent = (e) => e.target === e.currentTarget;
 
 // Page scroll lock shared by every open dialog: a COUNT, not "restore what was
 // there before" (stacked dialogs released in another order restored a stale value).

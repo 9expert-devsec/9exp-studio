@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, use, useEffect, useRef } from "react";
-import { lockPageScroll, useCloseWhenHidden } from "./dialogLifecycle";
+import { isOwnDialogEvent, lockPageScroll, useCloseWhenHidden } from "./dialogLifecycle";
 
 // Right-side drawer on the native <dialog> element, like Modal: showModal() gives
 // the focus trap, inert background and Escape for free. ~520px wide, full width on
@@ -68,7 +68,10 @@ export default function Drawer({ open, onClose, labelledBy, returnFocusId, size 
     <dialog
       ref={ref}
       aria-labelledby={labelledBy}
-      onClose={() => {
+      onClose={(e) => {
+        // Round 58.1: a Modal opened from inside this drawer fires `close` too (React
+        // passes it up the component tree) — that must NOT close the drawer.
+        if (!isOwnDialogEvent(e)) return;
         // A silent close (hidden by Activity / unmounting): not the user's close. Its
         // scroll lock is released by the effect cleanup (this event may arrive after
         // a re-show, e.g. StrictMode's remount, so it must not release the new lock).

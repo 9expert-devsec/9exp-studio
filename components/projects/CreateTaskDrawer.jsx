@@ -152,6 +152,8 @@ function TaskForm({ projectId, contentId, projectName, contentName, allowedTypes
 
   const onSubmit = (e) => {
     e.preventDefault();
+    // Round 58.1: only THIS form's submit saves the task (never one from a nested modal).
+    if (e.target !== e.currentTarget) return;
     // Step 2 values go with the save whenever Step 2 was opened for THIS type
     // (also from Step 1 after Back). Switching the type drops them.
     save(detailsOpened && !!detailForm && details?.__type === type);

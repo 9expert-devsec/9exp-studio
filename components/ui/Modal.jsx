@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
-import { useCloseWhenHidden } from "./dialogLifecycle";
+import { useEffect, useId, useRef, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
+import { isOwnDialogEvent, useCloseWhenHidden } from "./dialogLifecycle";
 import { X } from "lucide-react";
 
 // Accessible modal on the native <dialog> element: showModal() gives a focus trap,
@@ -15,14 +16,27 @@ import { X } from "lucide-react";
 // field. React's autoFocus does not work here: it runs before the dialog opens.
 // Round 57.1: hidden by <Activity> or unmounted → the native dialog leaves the modal
 // state silently (a hidden modal dialog kept the page inert; ./dialogLifecycle.js).
+//
+// Round 58.1 — a Modal opened from inside a Drawer / another Modal stays LOCAL:
+//   - React delivers a <dialog>'s `close` to every onClose up the React tree (it is
+//     a non-delegated event that still "bubbles" through components), so each
+//     dialog only reacts to its OWN close (isOwnDialogEvent);
+//   - it is portalled to <body> once mounted, so it is never inside the parent's
+//     <form> in the DOM (no implicit submission of the outer form on Enter);
+//   - a submit inside it stops here (never reaches an outer <form onSubmit>).
 const FIRST_FIELD =
   "input:not([type=hidden]):not([type=file]):not([disabled]):not([readonly]), select:not([disabled]), textarea:not([disabled]):not([readonly])";
 
 const WIDTH = { sm: "max-w-lg", md: "max-w-[35rem]" }; // md ≈ 560px (round 46 review dialogs)
 
+const noSubscribe = () => () => {};
+/** true on the client after hydration (the server / hydration render keeps the dialog in place, closed). */
+const useMounted = () => useSyncExternalStore(noSubscribe, () => true, () => false);
+
 export default function Modal({ open, onClose, title, description, closeOnBackdrop = false, size = "sm", children }) {
   const ref = useRef(null);
-  const silentRef = useCloseWhenHidden(ref);
+  const mounted = useMounted();
+  const silentRef = useCloseWhenHidden(ref, mounted);
   const titleId = useId();
   const descId = useId();
 
@@ -35,12 +49,14 @@ export default function Modal({ open, onClose, title, description, closeOnBackdr
       target?.focus();
     }
     if (!open && dialog.open) dialog.close();
-  }, [open]);
+    // `mounted`: the portal swaps the <dialog> element once after hydration.
+  }, [open, mounted]);
 
-  return (
+  const dialog = (
     <dialog
       ref={ref}
-      onClose={() => {
+      onClose={(e) => {
+        if (!isOwnDialogEvent(e)) return; // a nested dialog's close (58.1)
         if (silentRef.current) {
           silentRef.current = false;
           return;
@@ -50,6 +66,8 @@ export default function Modal({ open, onClose, title, description, closeOnBackdr
       // The dialog box is fully covered by its padded child, so a click whose target
       // is the <dialog> itself landed on the backdrop.
       onClick={closeOnBackdrop ? (e) => e.target === e.currentTarget && onClose?.() : undefined}
+      // A form inside this modal submits only itself (no outer <form onSubmit>).
+      onSubmit={(e) => e.stopPropagation()}
       aria-labelledby={titleId}
       aria-describedby={description ? descId : undefined}
       className={`m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${WIDTH[size] ?? WIDTH.sm} overflow-y-auto rounded-[24px] border border-line bg-card p-0 text-fg shadow-xl backdrop:bg-black/50`}
@@ -81,4 +99,5 @@ export default function Modal({ open, onClose, title, description, closeOnBackdr
       )}
     </dialog>
   );
+  return mounted ? createPortal(dialog, document.body) : dialog;
 }
