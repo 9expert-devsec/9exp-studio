@@ -9,7 +9,8 @@
 //     derived Status Asset (lib/tasks/assets.js), read-only.
 //   - Schedule Post = the task's due date (Bangkok; date only → 18:00).
 
-import { CalendarDays, Clock } from "lucide-react";
+import { CalendarDays } from "lucide-react";
+import TimePicker from "@/components/ui/TimePicker";
 import { Field, Section } from "@/components/tasks/DetailBlocks";
 import PersonPicker from "@/components/tasks/PersonPicker";
 import PlatformWorkTypeFields from "@/components/tasks/PlatformWorkTypeFields";
@@ -112,18 +113,14 @@ export default function PostDetailsStep({ values, setField, errors, projectId, o
             </div>
           </Field>
           <Field id="post-due-time" title="Time">
-            <div className="relative">
-              <Clock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-              <input
-                id="post-due-time"
-                type="time"
-                value={values.dueTime}
-                disabled={!values.dueDate}
-                onChange={(e) => setField("dueTime", e.target.value)}
-                className={`${input} pl-9`}
-                aria-describedby="post-due-hint"
-              />
-            </div>
+            {/* Round 52: 24-hour picker (the native time input showed AM/PM). */}
+            <TimePicker
+              id="post-due-time"
+              value={values.dueTime}
+              onChange={(v) => setField("dueTime", v)}
+              disabled={!values.dueDate}
+              describedBy="post-due-hint"
+            />
           </Field>
         </div>
         <p id="post-due-hint" className="-mt-2 text-xs text-fg-muted">Time defaults to 18:00 (Bangkok).</p>

@@ -3,7 +3,8 @@
 // Shared Step 2 building blocks (Clip, Graphic, …): section card, labelled field,
 // Bangkok date + time field, reference link field. Theme tokens only.
 
-import { CalendarDays, Clock, ExternalLink, Link2 } from "lucide-react";
+import { CalendarDays, ExternalLink, Link2 } from "lucide-react";
+import TimePicker from "@/components/ui/TimePicker";
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
 import { isHttpUrl } from "@/lib/projects/rules";
 
@@ -66,7 +67,7 @@ export function ReferenceField({ id, value, onChange, error, title = "Reference 
   );
 }
 
-/** Native date (browser calendar popover) + time, Bangkok wall clock. */
+/** Native date (browser calendar popover) + 24-hour time (components/ui/TimePicker.jsx, round 52), Bangkok wall clock. */
 export function DateTimeField({ id, title, date, time, min, onDate, onTime, error, hint }) {
   return (
     <fieldset aria-describedby={`${id}-hint ${id}-error`} className="min-w-0">
@@ -85,19 +86,7 @@ export function DateTimeField({ id, title, date, time, min, onDate, onTime, erro
             aria-invalid={!!error || undefined}
           />
         </div>
-        <div className="relative">
-          <Clock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-          <input
-            id={`${id}-time`}
-            type="time"
-            aria-label={`${title}: time`}
-            value={time}
-            disabled={!date}
-            onChange={(e) => onTime(e.target.value)}
-            className={`${input} w-32 pl-9`}
-            aria-invalid={!!error || undefined}
-          />
-        </div>
+        <TimePicker id={`${id}-time`} ariaLabel={`${title}: time`} value={time} onChange={onTime} disabled={!date} invalid={!!error} className="w-32" />
       </div>
       <p id={`${id}-hint`} className="mt-1.5 text-xs text-fg-muted">{hint}</p>
       <FieldError id={`${id}-error`} error={error} />

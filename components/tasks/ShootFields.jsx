@@ -1,11 +1,11 @@
 "use client";
 
-// "นัดถ่าย" fields (round 48): วันที่ · เวลา (24 h, components/tasks/TimeField.jsx) ·
+// "นัดถ่าย" fields (round 48): วันที่ · เวลา (24 h, components/ui/TimePicker.jsx) ·
 // สถานที่. Used by the Production / Photo Step 2 forms (optional group) and the
 // "ตั้งวันถ่ายทำ / เลื่อนวันนัดถ่าย" dialog (required). Rules: lib/tasks/statusView.js parseShoot.
 
 import { FieldError, input, label } from "@/components/projects/ProjectForm";
-import TimeField from "@/components/tasks/TimeField";
+import TimePicker from "@/components/ui/TimePicker";
 import { SHOOT_LOCATION_MAX } from "@/lib/tasks/statusView";
 
 /**
@@ -32,7 +32,7 @@ export default function ShootFields({ id, values, setField, errors = {}, require
         </div>
         <div>
           <label htmlFor={`${id}-time`} className={label}>เวลา{star}</label>
-          <TimeField id={`${id}-time`} value={values.shootTime} onChange={(v) => setField("shootTime", v)} invalid={!!errors.shootTime} describedBy={`${id}-time-error`} />
+          <TimePicker id={`${id}-time`} value={values.shootTime} onChange={(v) => setField("shootTime", v)} invalid={!!errors.shootTime} describedBy={`${id}-time-error`} />
           <FieldError id={`${id}-time-error`} error={errors.shootTime} />
         </div>
       </div>

@@ -16,7 +16,7 @@ import Modal from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
 import { input, label } from "@/components/projects/ProjectForm";
 import { formatThaiDay } from "@/lib/projects/format";
-import TimeField from "@/components/tasks/TimeField";
+import TimePicker from "@/components/ui/TimePicker";
 import {
   addDays,
   checkLogs,
@@ -280,11 +280,11 @@ function PlanForm({ panel, person, entry, taskPlans, onDone }) {
               <div className="grid grid-cols-[1fr_1fr_auto] items-start gap-3">
                 <div>
                   <label htmlFor={`${id}-start`} className={label}>เริ่ม</label>
-                  <TimeField id={`${id}-start`} value={c.start} onChange={(v) => update(c.key, { start: v })} />
+                  <TimePicker id={`${id}-start`} value={c.start} onChange={(v) => update(c.key, { start: v })} />
                 </div>
                 <div>
                   <label htmlFor={`${id}-end`} className={label}>สิ้นสุด</label>
-                  <TimeField id={`${id}-end`} value={c.end} onChange={(v) => update(c.key, { end: v })} />
+                  <TimePicker id={`${id}-end`} value={c.end} onChange={(v) => update(c.key, { end: v })} />
                 </div>
                 <span className="mt-8 rounded-full bg-plan-soft px-2.5 py-1 text-xs font-semibold text-plan-fg">
                   {v ? formatDuration(v.minutes) : "–"}
@@ -475,7 +475,7 @@ function LogForm({ panel, person, entry, initialDate, taskEntries, onDone }) {
               return (
                 <div key={r.key}>
                   <div className="grid grid-cols-[1fr_1fr_6.5rem_auto] items-start gap-2">
-                    <TimeField
+                    <TimePicker
                       id={`log-${r.key}-start`}
                       ariaLabel={`เริ่ม ช่วงที่ ${i + 1}`}
                       value={r.start}
@@ -485,7 +485,7 @@ function LogForm({ panel, person, entry, initialDate, taskEntries, onDone }) {
                       }}
                       invalid={!!err}
                     />
-                    <TimeField
+                    <TimePicker
                       id={`log-${r.key}-end`}
                       ariaLabel={`สิ้นสุด ช่วงที่ ${i + 1}`}
                       value={r.end}

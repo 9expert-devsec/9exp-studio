@@ -45,6 +45,15 @@
   }
 }
 
+/* Round 52 scrollbar utility (literal class name):
+   no-scrollbar   scrolls by wheel / touch / drag / keys, no scrollbar drawn (time picker columns) */
+@utility no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
 /* Semantic tokens: light on :root, dark on .dark (class set on <html> before paint). */
 :root {
   --ds-page: #f8fafd;

@@ -15,7 +15,7 @@ import { Link2, Loader2 } from "lucide-react";
 import { publishArticleAction, savePostLinksAction } from "@/app/(app)/projects/task-actions";
 import { invalidateTaskPanel } from "@/components/tasks/panelCache";
 import PlatformIcon from "@/components/tasks/PlatformIcon";
-import TimeField from "@/components/tasks/TimeField";
+import TimePicker from "@/components/ui/TimePicker";
 import { buttonClass } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { toast } from "@/components/ui/Toast";
@@ -49,7 +49,7 @@ function DateTime({ id, date, time, onDate, onTime, error }) {
   return (
     <div className="grid grid-cols-2 gap-2">
       <input id={`${id}-date`} type="date" value={date} onChange={(e) => onDate(e.target.value)} className={input} aria-label="วันที่" aria-invalid={!!error || undefined} />
-      <TimeField id={`${id}-time`} ariaLabel="เวลา" value={time} onChange={onTime} invalid={!!error} />
+      <TimePicker id={`${id}-time`} ariaLabel="เวลา" value={time} onChange={onTime} invalid={!!error} />
     </div>
   );
 }
