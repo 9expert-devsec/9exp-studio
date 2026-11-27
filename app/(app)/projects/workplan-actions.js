@@ -19,6 +19,7 @@ import {
   bangkokDay,
   canWriteFor,
   checkLogs,
+  notStartedMessage,
   checkPlans,
   entryMinutes,
   parseEntry,
@@ -26,12 +27,14 @@ import {
 } from "@/lib/tasks/workplan";
 import Task from "@/models/Task";
 import TaskWorkEntry from "@/models/TaskWorkEntry";
+import { taskFormers, taskStarted } from "@/lib/tasks/workplanStore";
 import User from "@/models/User";
 
 const fail = (error, fieldErrors) => ({ ok: false, error, ...(fieldErrors ? { fieldErrors } : {}) });
 const str = (v) => (typeof v === "string" ? v : "");
 const SIGNED_OUT = "Your session has expired. Please sign in again.";
 const FIX = "แก้ไขรายการที่มีปัญหาก่อนบันทึก";
+const FORMER_ADD = "ผู้รับงานเดิม: แก้ไขหรือลบรายการที่มีอยู่ได้เท่านั้น";
 
 const json = (v, fallback) => {
   try {
@@ -53,10 +56,12 @@ async function loadScope(formData) {
   const task = await findContentTask(project, content, str(formData.get("taskId")));
   if (!task) return { error: "That task no longer exists." };
   const person = str(formData.get("person"));
-  const who = canWriteFor(person, { viewerId: viewer.idStr, fullAccess: !!viewer.isAdmin, people: workPlanPeople(task) });
+  // Round 50: former people (handover) — Manager / superadmin may edit / delete their entries only.
+  const formers = await taskFormers(task);
+  const who = canWriteFor(person, { viewerId: viewer.idStr, fullAccess: !!viewer.isAdmin, people: workPlanPeople(task), formers });
   if (!who.ok) return { error: "บันทึกได้เฉพาะแผน/เวลาของตัวเอง (หรือ Manager บันทึกแทน)" };
   const user = await User.findById(person).select("name").lean();
-  return { viewer, project, task, person, personName: user?.name ?? "Unknown", onBehalf: who.onBehalf };
+  return { viewer, project, task, person, personName: user?.name ?? "Unknown", onBehalf: who.onBehalf, former: who.former };
 }
 
 /** The person's saved entries of `kind` on `dates`, on EVERY task, with the task titles. */
@@ -106,6 +111,7 @@ export async function savePlansAction(formData) {
   if (raw.length > MAX_CARDS) return fail(`ไม่เกิน ${MAX_CARDS} แผนต่อครั้ง`);
   const editId = raw.find((c) => c?.id) ? str(raw[0]?.id) : "";
   if (editId && raw.length !== 1) return fail("แก้ไขได้ครั้งละ 1 แผน");
+  if (scope.former && !editId) return fail(FORMER_ADD);
 
   const errors = {};
   const cards = raw.map((c, i) => {
@@ -178,6 +184,9 @@ export async function saveLogsAction(formData) {
   const note = str(formData.get("note")).trim();
   if (note.length > NOTE_MAX) return fail(FIX, { note: `ไม่เกิน ${NOTE_MAX} ตัวอักษร` });
   const editId = str(formData.get("id"));
+  if (scope.former && !editId) return fail(FORMER_ADD);
+  // Round 50: actual time only once the work has started (editing existing logs is fine).
+  if (!editId && !(await taskStarted(scope.task))) return fail(notStartedMessage(scope.task.type));
 
   const rawRows = mode === "hours" ? [{ date, mode, hours: formData.get("hours") }] : (json(formData.get("rows"), []) ?? []).map((r) => ({ date, mode, start: r?.start, end: r?.end }));
   if (!rawRows.length) return fail("เพิ่มช่วงเวลาอย่างน้อย 1 ช่วง");

@@ -10,10 +10,12 @@
 // Hours-only entries: a plan draws as a dashed outline across the whole Plan
 // lane; a log as a semi-transparent orange stub at the LEFT of the Actual lane,
 // its width to scale. Blocks are at least MIN_BLOCK_PX wide (left edge = true
-// time); expanded-row labels never overlap (layoutLaneLabels, round 47.1).
+// time). Round 50: the expanded row follows Figma 363:251 (labelled lanes, axis,
+// grouped list with pencils); former people (handover) show under "(เดิม)",
+// read-only except for Manager / superadmin; Log time waits for the task to start.
 
-import { useEffect, useRef, useState } from "react";
-import { CalendarRange, ChevronDown, ChevronRight, Clock, Plus } from "lucide-react";
+import { useState } from "react";
+import { CalendarRange, ChevronDown, ChevronRight, Clock, Pencil, Plus } from "lucide-react";
 import { LogDialog, PlanDialog } from "@/components/tasks/WorkPlanDialogs";
 import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
@@ -26,8 +28,10 @@ import {
   defaultRange,
   entryLabel,
   formatDuration,
+  entryMinutes,
   formatOver,
-  layoutLaneLabels,
+  groupSummary,
+  itemRange,
   summaryCards,
   toMin,
 } from "@/lib/tasks/workplan";
@@ -55,7 +59,11 @@ export default function WorkPlanTab({ panel }) {
   const auto = defaultRange({ startDate: wp.startDate, dueDate: wp.dueDate, entries: mine, today: wp.today });
   const { from, to } = range ?? auto;
   const [dialog, setDialog] = useState(null); // { kind: "plan"|"log", entry?, date? }
-  const canWrite = !!person && wp.writable.includes(person.id);
+  // Edit / delete (incl. a former person's entries for Manager / SA) vs add new ones.
+  const canEdit = !!person && wp.writable.includes(person.id);
+  const canAdd = !!person && wp.canAdd.includes(person.id);
+  const current = wp.people.filter((p) => !p.former);
+  const formers = wp.people.filter((p) => p.former);
 
   if (!person) {
     return <p className="rounded-[12px] bg-card-inset py-10 text-center text-sm text-fg-muted">ยังไม่มีผู้รับผิดชอบสำหรับ Work Plan ของ Task นี้</p>;
@@ -88,21 +96,27 @@ export default function WorkPlanTab({ panel }) {
                 }}
                 className="min-h-8 bg-transparent pr-1 text-sm text-fg outline-none"
               >
-                {wp.people.map((p) => (
+                {current.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
+                {formers.length > 0 && (
+                  <optgroup label="──────────">
+                    {formers.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name} (เดิม)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
               </select>
             </label>
           )}
           <RangePicker from={from} to={to} onChange={setRange} onReset={() => setRange(null)} />
-          {canWrite && (
+          {canAdd && (
             <>
-              <button type="button" onClick={() => openLog()} className={buttonClass("outline", "min-h-9")}>
-                <Clock className="size-4" aria-hidden="true" />
-                Log time
-              </button>
+              <LogTimeButton onClick={() => openLog()} started={wp.started} startMessage={wp.startMessage} className={buttonClass("outline", "min-h-9")} />
               <button type="button" onClick={() => openPlan()} className={buttonClass("primary", "min-h-9")}>
                 <Plus className="size-4" aria-hidden="true" />
                 Add plan
@@ -111,6 +125,15 @@ export default function WorkPlanTab({ panel }) {
           )}
         </div>
       </div>
+
+      {canAdd && !wp.started && (
+        <p id="wp-not-started" className="-mt-2 text-right text-xs text-fg-muted">{wp.startMessage}</p>
+      )}
+      {person.former && (
+        <p className="rounded-[10px] bg-card-inset px-3 py-2 text-xs text-fg-muted">
+          {person.name} (เดิม) — ผู้รับงานก่อนเปลี่ยนมือ · {canEdit ? "Manager แก้ไข/ลบรายการเดิมได้" : "ดูได้อย่างเดียว"}
+        </p>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="rounded-[14px] bg-plan-soft p-3.5">
@@ -130,9 +153,9 @@ export default function WorkPlanTab({ panel }) {
       {plans.length === 0 && logs.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-[12px] bg-card-inset py-10 text-center">
           <p className="text-sm text-fg-muted">ยังไม่มีแผนหรือเวลาที่บันทึก</p>
-          {canWrite && (
+          {canAdd && (
             <div className="flex gap-2">
-              <button type="button" onClick={() => openLog()} className={buttonClass("outline", "min-h-9")}>Log time</button>
+              <LogTimeButton onClick={() => openLog()} started={wp.started} startMessage={wp.startMessage} className={buttonClass("outline", "min-h-9")} />
               <button type="button" onClick={() => openPlan()} className={buttonClass("primary", "min-h-9")}>+ Add plan</button>
             </div>
           )}
@@ -143,7 +166,10 @@ export default function WorkPlanTab({ panel }) {
           today={wp.today}
           // Round 47.1: a range across calendar years shows the year on every row date.
           withYear={from.slice(0, 4) !== to.slice(0, 4)}
-          canWrite={canWrite}
+          canEdit={canEdit}
+          canAdd={canAdd}
+          started={wp.started}
+          startMessage={wp.startMessage}
           onLog={openLog}
           onEditPlan={openPlan}
           onEditLog={(e) => openLog(e.date, e)}
@@ -200,60 +226,27 @@ function RangePicker({ from, to, onChange, onReset }) {
 /** Block left + width: true start time; at least MIN_BLOCK_PX wide so a short block never shrinks to a dot. */
 const blockStyle = (startMin, minutes) => ({ left: pct(startMin), width: `max(${MIN_BLOCK_PX}px, ${pct(minutes)})` });
 
-/** The element's width in px (ResizeObserver); 0 until measured. */
-function useWidth(ref, active) {
-  const [width, setWidth] = useState(0);
-  useEffect(() => {
-    const el = ref.current;
-    if (!active || !el) return;
-    const ro = new ResizeObserver(([e]) => setWidth(e.contentRect.width));
-    ro.observe(el);
-    return () => ro.disconnect();
-  }, [ref, active]);
-  return width;
-}
-
-const LINE_PX = 14;
-
 /**
- * One lane of blocks (Plan = lavender, Actual = orange). `labels` (expanded row):
- * range labels under the blocks, laid out by lib/tasks/workplan.js
- * layoutLaneLabels — left to right, a second line when they'd overlap, hidden
- * when neither line has room (the block's tooltip still shows the range).
+ * One lane of blocks (Plan = lavender, Actual = orange); every block keeps a
+ * hover tooltip with its range. Round 50: no labels under the blocks (the
+ * grouped list below shows every range). `tall` = the expanded row (24px).
  */
-function Lane({ entries, kind, thin, labels = false }) {
+function Lane({ entries, kind, tall = false }) {
   const fill = kind === "plan" ? "bg-plan" : "bg-brand-500";
-  const h = thin ? "h-1.5" : "h-4";
-  const ref = useRef(null);
-  const width = useWidth(ref, labels);
-  const placed = labels && width ? layoutLaneLabels(entries, width) : [];
-  const lines = placed.reduce((n, l) => (l.line == null ? n : Math.max(n, l.line + 1)), 0);
+  const radius = tall ? "rounded-[6px]" : "rounded-[4px]";
   return (
-    <div ref={ref} className="relative">
-      <div className={`relative ${h}`}>
-        {entries.map((e) => {
-          if (e.mode === "hours") {
-            return kind === "plan" ? (
-              <span key={e.id} className="absolute inset-y-0 left-0 right-0 rounded-[4px] border border-dashed border-plan" title={entryLabel(e)} />
-            ) : (
-              <span key={e.id} className={`absolute inset-y-0 rounded-[4px] ${fill} opacity-50`} style={blockStyle(0, e.minutes)} title={entryLabel(e)} />
-            );
-          }
-          const s = toMin(e.start);
-          return <span key={e.id} className={`absolute inset-y-0 rounded-[4px] ${fill}`} style={blockStyle(s, toMin(e.end) - s)} title={entryLabel(e)} />;
-        })}
-      </div>
-      {labels && (
-        <div aria-hidden="true" className="relative mt-0.5" style={{ height: Math.max(lines, 1) * LINE_PX }}>
-          {placed
-            .filter((l) => l.line != null)
-            .map((l) => (
-              <span key={l.id} className="absolute whitespace-nowrap text-[10px] leading-[14px] text-fg-muted" style={{ left: l.x, top: l.line * LINE_PX }}>
-                {l.text}
-              </span>
-            ))}
-        </div>
-      )}
+    <div className={`relative ${tall ? "h-6" : "h-1.5"}`}>
+      {entries.map((e) => {
+        if (e.mode === "hours") {
+          return kind === "plan" ? (
+            <span key={e.id} className={`absolute inset-y-0 left-0 right-0 ${radius} border border-dashed border-plan`} title={entryLabel(e)} />
+          ) : (
+            <span key={e.id} className={`absolute inset-y-0 ${radius} ${fill} opacity-50`} style={blockStyle(0, e.minutes)} title={entryLabel(e)} />
+          );
+        }
+        const s = toMin(e.start);
+        return <span key={e.id} className={`absolute inset-y-0 ${radius} ${fill}`} style={blockStyle(s, toMin(e.end) - s)} title={entryLabel(e)} />;
+      })}
     </div>
   );
 }
@@ -270,9 +263,86 @@ function MiniBar({ row }) {
   return (
     <div className="relative flex h-7 flex-col justify-center gap-1 overflow-hidden rounded-full bg-track/60 px-0" aria-hidden="true">
       <Grid every={6} />
-      <Lane entries={row.plans} kind="plan" thin />
-      <Lane entries={row.logs} kind="log" thin />
+      <Lane entries={row.plans} kind="plan" />
+      <Lane entries={row.logs} kind="log" />
     </div>
+  );
+}
+
+/** Expanded row (Figma 363:251): "แผน" / "ทำจริง" labelled lanes on a grey track, then the axis. */
+function DayLanes({ row }) {
+  const lane = (label, entries, kind) => (
+    <div className="grid grid-cols-[3rem_minmax(0,1fr)] items-center gap-2">
+      <span className="text-xs text-fg-muted">{label}</span>
+      <div className="relative overflow-hidden rounded-[8px] bg-card-inset px-0 py-1.5">
+        <Grid every={3} />
+        <Lane entries={entries} kind={kind} tall />
+      </div>
+    </div>
+  );
+  return (
+    <div className="flex flex-col gap-1.5">
+      {lane("แผน", row.plans, "plan")}
+      {lane("ทำจริง", row.logs, "log")}
+      <div className="grid grid-cols-[3rem_minmax(0,1fr)] gap-2" aria-hidden="true">
+        <span />
+        <div className="relative h-4 text-[10px] text-fg-muted">
+          {Array.from({ length: 9 }, (_, i) => (
+            <span key={i} className="absolute -translate-x-1/2 first:translate-x-0 last:-translate-x-full" style={{ left: pct(i * 180) }}>
+              {String(i * 3).padStart(2, "0")}:00
+            </span>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Grouped list: "● แผน · 2 ช่วง · 4 ชม." + one row per item (range bold · duration · note · ✎). */
+function EntryGroup({ kind, entries, canEdit, onEdit }) {
+  const g = groupSummary(entries);
+  const plan = kind === "plan";
+  return (
+    <div>
+      <p className="flex items-center gap-1.5 py-1.5 text-xs">
+        <span className={`size-2 rounded-full ${plan ? "bg-plan" : "bg-brand-500"}`} aria-hidden="true" />
+        <span className="font-bold text-fg">{plan ? "แผน" : "ทำจริง"}</span>
+        <span className="text-fg-muted">{g.line}</span>
+      </p>
+      {entries.length > 0 && (
+        <ul className="divide-y divide-line-subtle">
+          {entries.map((e) => (
+            <li key={e.id} className="flex min-w-0 items-center gap-2 py-1.5 text-sm">
+              <span className="shrink-0 font-semibold text-fg">{itemRange(e)}</span>
+              <span className="shrink-0 text-xs text-fg-muted">{formatDuration(entryMinutes(e))}</span>
+              {!plan && e.note && <span className="min-w-0 truncate text-xs text-fg-muted" title={e.note}>{e.note}</span>}
+              {canEdit && (
+                <button
+                  type="button"
+                  onClick={() => onEdit(e)}
+                  aria-label={plan ? "แก้ไขแผน" : "แก้ไขเวลา"}
+                  className="ml-auto flex size-7 shrink-0 items-center justify-center rounded-[8px] text-fg-muted hover:bg-card-inset hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+                >
+                  <Pencil className="size-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** "Log time": disabled before the task has started, with the reason as tooltip + hint. */
+export function LogTimeButton({ onClick, started, startMessage, className }) {
+  return (
+    <span title={started ? undefined : startMessage} className="inline-flex">
+      <button type="button" onClick={onClick} disabled={!started} aria-describedby={started ? undefined : "wp-not-started"} className={className}>
+        <Clock className="size-4" aria-hidden="true" />
+        Log time
+      </button>
+    </span>
   );
 }
 
@@ -280,7 +350,7 @@ function MiniBar({ row }) {
 
 const COLS = "grid grid-cols-[8.5rem_minmax(8rem,1fr)_4.5rem_4.5rem_5.5rem] items-center gap-3";
 
-function DayTable({ rows, today, withYear, canWrite, onLog, onEditPlan, onEditLog }) {
+function DayTable({ rows, today, withYear, canEdit, canAdd, started, startMessage, onLog, onEditPlan, onEditLog }) {
   const [open, setOpen] = useState(() => new Set([today]));
   const toggle = (d) => setOpen((s) => (s.has(d) ? new Set([...s].filter((x) => x !== d)) : new Set([...s, d])));
   return (
@@ -302,7 +372,10 @@ function DayTable({ rows, today, withYear, canWrite, onLog, onEditPlan, onEditLo
               withYear={withYear}
               expanded={open.has(r.date)}
               onToggle={() => toggle(r.date)}
-              canWrite={canWrite}
+              canEdit={canEdit}
+              canAdd={canAdd}
+              started={started}
+              startMessage={startMessage}
               onLog={onLog}
               onEditPlan={onEditPlan}
               onEditLog={onEditLog}
@@ -317,7 +390,7 @@ function DayTable({ rows, today, withYear, canWrite, onLog, onEditPlan, onEditLo
 const OverPill = ({ min }) =>
   min ? <span className="rounded-full bg-success/15 px-2 py-0.5 text-xs font-semibold text-success">{formatOver(min)}</span> : <span className="text-fg-muted">–</span>;
 
-function DayRow({ row, isToday, withYear, expanded, onToggle, canWrite, onLog, onEditPlan, onEditLog }) {
+function DayRow({ row, isToday, withYear, expanded, onToggle, canEdit, canAdd, started, startMessage, onLog, onEditPlan, onEditLog }) {
   const valTone = isToday ? "text-accent-fg" : "text-fg";
   const panelId = `wp-day-${row.date}`;
   return (
@@ -368,63 +441,19 @@ function DayRow({ row, isToday, withYear, expanded, onToggle, canWrite, onLog, o
               <p className="text-[11px] text-fg-muted">เกินแผน</p>
               <p className="text-sm font-bold text-success">{row.overMin ? formatOver(row.overMin) : <span className="text-fg-muted">–</span>}</p>
             </div>
-            {canWrite && (
-              <button type="button" onClick={() => onLog(row.date)} className={buttonClass("primary", "min-h-9 w-full")}>
-                <Clock className="size-4" aria-hidden="true" />
-                Log time
-              </button>
+            {canAdd && (
+              <LogTimeButton onClick={() => onLog(row.date)} started={started} startMessage={startMessage} className={buttonClass("primary", "min-h-9 w-full")} />
             )}
           </div>
-          <div className="min-w-0">
-            <p className="flex gap-4 text-xs text-fg-muted">
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-sm bg-plan" aria-hidden="true" />
-                Plan (แผน)
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="size-2.5 rounded-sm bg-brand-500" aria-hidden="true" />
-                Actual (ทำจริง)
-              </span>
-            </p>
-            <div className="relative mt-2 flex flex-col gap-1 rounded-[10px] bg-card-inset px-1 py-2">
-              <Grid every={3} />
-              <Lane entries={row.plans} kind="plan" labels />
-              <Lane entries={row.logs} kind="log" labels />
+          <div className="flex min-w-0 flex-col gap-3">
+            <DayLanes row={row} />
+            <div className="flex flex-col gap-1">
+              <EntryGroup kind="plan" entries={row.plans} canEdit={canEdit} onEdit={onEditPlan} />
+              <EntryGroup kind="log" entries={row.logs} canEdit={canEdit} onEdit={onEditLog} />
             </div>
-            <div className="relative mt-1 h-4 text-[10px] text-fg-muted" aria-hidden="true">
-              {Array.from({ length: 9 }, (_, i) => (
-                <span key={i} className="absolute -translate-x-1/2 first:translate-x-0 last:-translate-x-full" style={{ left: pct(i * 180) }}>
-                  {String(i * 3).padStart(2, "0")}:00
-                </span>
-              ))}
-            </div>
-            <ul className="mt-3 flex flex-col divide-y divide-line-subtle text-sm">
-              {row.plans.map((e) => (
-                <li key={e.id} className="flex items-center justify-between gap-2 py-1.5">
-                  <span className="text-plan-fg">แผน · {entryLabel(e)}</span>
-                  {canWrite && <EditLink onClick={() => onEditPlan(e)} />}
-                </li>
-              ))}
-              {row.logs.map((e) => (
-                <li key={e.id} className="flex items-center justify-between gap-2 py-1.5">
-                  <span className="min-w-0 text-fg">
-                    <span className="text-accent-fg">{entryLabel(e)}</span>
-                    {e.note && <span className="text-fg-muted"> · {e.note}</span>}
-                  </span>
-                  {canWrite && <EditLink onClick={() => onEditLog(e)} />}
-                </li>
-              ))}
-              {!row.plans.length && !row.logs.length && <li className="py-1.5 text-fg-muted">ยังไม่มีแผนหรือเวลาที่บันทึกในวันนี้</li>}
-            </ul>
           </div>
         </div>
       )}
     </div>
   );
 }
-
-const EditLink = ({ onClick }) => (
-  <button type="button" onClick={onClick} className="shrink-0 rounded text-xs font-semibold text-accent-fg hover:underline focus-visible:outline-2 focus-visible:outline-brand-500">
-    Edit
-  </button>
-);
