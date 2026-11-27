@@ -82,29 +82,32 @@
 
 }
 
+/* Round 51: "A · Slate Navy" (Figma 369:124) — one cool navy family with a clear
+   elevation ladder: page #0f1626 < sidebar #131b2e < inset #141d31 < card #18223a
+   < raised (track) #202c47. */
 .dark {
-  --ds-page: #1e1e1e;
-  --ds-card: #1a2836;
-  --ds-card-inset: #13212f;
-  --ds-line: #2f3b48;
+  --ds-page: #0f1626;
+  --ds-card: #18223a;
+  --ds-card-inset: #141d31;
+  --ds-line: #303d5a; /* spec #28344d nudged for ≥1.4:1 vs card */
   --ds-line-subtle: rgba(255, 255, 255, 0.09);
-  --ds-fg: #f8fafd;
-  --ds-fg-muted: #a8aeb5;
+  --ds-fg: #e7ecf5;
+  --ds-fg-muted: #94a3b8;
   --ds-control: rgba(255, 255, 255, 0.06);
   --ds-control-line: transparent; /* no border in dark */
-  --ds-track: #394450;
-  --ds-accent-fg: #fdba74;
-  --ds-accent-soft: #3c2d26;
+  --ds-track: #202c47; /* "raised": tracks, chips, hover */
+  --ds-accent-fg: #ff7a2e;
+  --ds-accent-soft: #423238; /* 18% #ff7a2e over card */
 
-  --ds-success: #6ee7b7;
-  --ds-warning: #fcd34d;
+  --ds-success: #34d399;
+  --ds-warning: #fbbf24;
   --ds-danger: #f87171;
 
   --ds-plan: #9d90ff;
   --ds-plan-fg: #c4bcff;
-  --ds-plan-soft: #25233f;
+  --ds-plan-soft: #2d345a; /* 16% plan over card */
 
-  --ds-nav-bg: #0d1b2a;
+  --ds-nav-bg: #131b2e;
   --ds-nav-border: rgba(255, 255, 255, 0.1);
   --ds-nav-shadow: 0 8px 24px rgba(0, 0, 0, 0.32);
   --ds-nav-fg: #bbbfc3;
