@@ -8,9 +8,10 @@
 // current table stays on screen until the new one is ready.
 
 import { useEffect, useId, useRef, useState, useTransition } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { Check, ChevronDown, Filter, Search, X } from "lucide-react";
-import { ALL_TASKS_GROUPS, ALL_TASKS_PATH, activeFilterCount, allTasksQuery, parseAllTasks } from "@/lib/tasks/allTasksFilters";
+import { activeFilterCount, groupsFor, tasksHref } from "@/lib/tasks/allTasksFilters";
+import { useAllTasksState } from "./useAllTasksState";
 import AllTasksFilterModal from "./AllTasksFilterModal";
 import { TOOLBAR_H } from "./allTasksStyles";
 
@@ -22,10 +23,10 @@ const on = "border-brand-500 bg-accent-soft text-accent-fg";
 /** @param {{ projects: {id:string,label:string,icon?:string}[], people: {id:string,label:string,avatarUrl:string|null}[] }} props */
 export default function AllTasksToolbar({ projects, people }) {
   const router = useRouter();
-  const f = parseAllTasks(useSearchParams());
+  const f = useAllTasksState();
   const [, startTransition] = useTransition();
   const go = (changes) =>
-    startTransition(() => router.replace(`${ALL_TASKS_PATH}${allTasksQuery(f, changes)}`, { scroll: false }));
+    startTransition(() => router.replace(tasksHref(f, changes), { scroll: false }));
 
   // ── Search: local text while typing, debounced into ?q= ──
   const [draft, setDraft] = useState(null); // null = show the URL's q
@@ -36,7 +37,7 @@ export default function AllTasksToolbar({ projects, people }) {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
       startTransition(() => {
-        router.replace(`${ALL_TASKS_PATH}${allTasksQuery(f, { q: text.trim() })}`, { scroll: false });
+        router.replace(tasksHref(f, { q: text.trim() }), { scroll: false });
         setDraft((d) => (d === text ? null : d)); // kept if the user typed on meanwhile
       });
     }, SEARCH_DEBOUNCE_MS);
@@ -55,7 +56,7 @@ export default function AllTasksToolbar({ projects, people }) {
           type="search"
           value={search}
           onChange={(e) => onSearch(e.target.value)}
-          placeholder="ค้นหาชื่อ Task, รหัส หรือโปรเจกต์"
+          placeholder={f.scope !== "mine" ? "ค้นหาชื่อ Task, รหัส หรือโปรเจกต์" : f.ws === "done" ? "ค้นหาในงานที่เสร็จแล้ว" : "ค้นหาชื่อ Task, รหัส หรือโปรเจกต์ ในงานของฉัน"}
           maxLength={100}
           className="h-full w-full rounded-[10px] border border-line bg-card pl-10 pr-10 text-sm text-fg outline-none placeholder:text-fg-muted focus:border-brand-500 focus:ring-1 focus:ring-brand-500 [&::-webkit-search-cancel-button]:hidden"
         />
@@ -92,7 +93,7 @@ export default function AllTasksToolbar({ projects, people }) {
       </button>
 
       {/* Round 57: no grouping in the calendar (the param stays for the way back). */}
-      {f.view !== "calendar" && <GroupMenu value={f.group} onPick={(group) => go({ group })} />}
+      {f.view !== "calendar" && <GroupMenu options={groupsFor(f)} value={f.group} onPick={(group) => go({ group })} />}
 
       <AllTasksFilterModal
         open={filterOpen}
@@ -110,12 +111,12 @@ export default function AllTasksToolbar({ projects, people }) {
 }
 
 /** "จัดกลุ่ม: …" — a menu of radio items; orange once a grouping is on. */
-function GroupMenu({ value, onPick }) {
+function GroupMenu({ options, value, onPick }) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
   const buttonRef = useRef(null);
   const menuId = useId();
-  const current = ALL_TASKS_GROUPS.find((g) => g.key === value) ?? ALL_TASKS_GROUPS[0];
+  const current = options.find((g) => g.key === value) ?? options[0];
 
   useEffect(() => {
     if (!open) return;
@@ -165,7 +166,7 @@ function GroupMenu({ value, onPick }) {
           onKeyDown={onMenuKey}
           className="absolute right-0 top-full z-40 mt-2 w-48 rounded-[14px] border border-line bg-card p-1.5 shadow-xl"
         >
-          {ALL_TASKS_GROUPS.map((g) => {
+          {options.map((g) => {
             const checked = g.key === value;
             return (
               <button

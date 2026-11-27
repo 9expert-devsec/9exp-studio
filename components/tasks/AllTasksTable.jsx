@@ -14,17 +14,21 @@
 // other param kept); the whole row is the link's hit area (stretched link).
 // Grouping hides what the group header already says: project → no project name
 // in line 2, type → no type badge, assignee → empty ผู้รับผิดชอบ cell.
+//
+// Round 58 (My Workspace, f.scope "mine"): column 3 is บทบาทของฉัน (row.role);
+// the Task cell gets "แผนวันนี้ N ช่วง" (row.planToday); on งานที่เสร็จแล้ว the
+// columns are Task · สถานะสุดท้าย · บทบาทของฉัน · เสร็จเมื่อ (sortable).
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { ArrowDown, ArrowUp, ArrowUpDown, ChevronDown, ChevronRight, SearchX } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarClock, ChevronDown, ChevronRight, SearchX } from "lucide-react";
 import TaskOpenLink from "@/components/tasks/TaskOpenLink";
 import { ProjectIconTile } from "@/components/projects/ProjectBits";
 import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
 import { cardClass } from "@/components/ui/Card";
 import Pagination from "@/components/ui/Pagination";
-import { ALL_TASKS_PATH, EMPTY_MODAL_FILTERS, allTasksQuery, hasNarrowing } from "@/lib/tasks/allTasksFilters";
+import { allTasksQuery, clearedFilters, hasNarrowing, tasksHref } from "@/lib/tasks/allTasksFilters";
 import { STOPPED_STAGE, TASK_STAGES, taskTypeTone } from "@/lib/tasks/types";
 import { CARD_FILL, COL, ROW_SKELETON_H, SCROLLER, STICKY_HEAD, TABLE_HEAD } from "./allTasksStyles";
 
@@ -43,9 +47,9 @@ function SortHeader({ f, field, label }) {
   const next = asc ? `-${field}` : field;
   const Icon = asc ? ArrowUp : desc ? ArrowDown : ArrowUpDown;
   return (
-    <th scope="col" aria-sort={asc ? "ascending" : desc ? "descending" : "none"} className={`${th} ${field === "due" ? COL.due : ""}`}>
+    <th scope="col" aria-sort={asc ? "ascending" : desc ? "descending" : "none"} className={th}>
       <Link
-        href={`${ALL_TASKS_PATH}${allTasksQuery(f, { sort: next })}`}
+        href={tasksHref(f, { sort: next })}
         scroll={false}
         className="inline-flex items-center gap-1 rounded hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500"
       >
@@ -97,18 +101,40 @@ function PersonCell({ row }) {
   );
 }
 
-function Row({ row, group }) {
+/** บทบาทของฉัน (round 58): the role + its detail / other roles. */
+function RoleCell({ role }) {
+  if (!role) return <span className="text-sm text-fg-muted">–</span>;
+  return (
+    <span className="flex min-w-0 flex-col">
+      <span className="truncate text-sm font-medium text-fg">{role.label}</span>
+      {role.sub && <span className="truncate text-xs text-fg-muted" title={role.sub}>{role.sub}</span>}
+    </span>
+  );
+}
+
+function Row({ row, f }) {
+  const group = f.group;
+  const mine = f.scope === "mine";
+  const done = mine && f.ws === "done";
   return (
     <tr className={`relative transition-colors hover:bg-card-inset/60 ${ROW_SKELETON_H}`}>
       <td className={`${td} max-w-0`}>
-        <TaskOpenLink
-          taskId={row.id}
-          href={row.openHref}
-          className="block truncate rounded text-sm font-semibold text-fg outline-none after:absolute after:inset-0 after:content-[''] hover:text-accent-fg focus-visible:outline-2 focus-visible:outline-brand-500"
-          title={row.title}
-        >
-          {row.title}
-        </TaskOpenLink>
+        <span className="flex min-w-0 items-center gap-2">
+          <TaskOpenLink
+            taskId={row.id}
+            href={row.openHref}
+            className="block min-w-0 truncate rounded text-sm font-semibold text-fg outline-none after:absolute after:inset-0 after:content-[''] hover:text-accent-fg focus-visible:outline-2 focus-visible:outline-brand-500"
+            title={row.title}
+          >
+            {row.title}
+          </TaskOpenLink>
+          {row.planToday > 0 && (
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-plan-soft px-2 py-0.5 text-[11px] font-semibold text-plan-fg">
+              <CalendarClock className="size-3" aria-hidden="true" />
+              แผนวันนี้ {row.planToday} ช่วง
+            </span>
+          )}
+        </span>
         <p className="mt-1 flex min-w-0 items-center gap-2 text-xs text-fg-muted">
           {group !== "type" && <TypeBadge type={row.type} label={row.typeLabel} />}
           <span className="shrink-0 font-mono">{row.code}</span>
@@ -126,8 +152,14 @@ function Row({ row, group }) {
       <td className={td}>
         <StatusCell row={row} />
       </td>
-      <td className={`${td} max-w-0`}>{group === "assignee" ? <span className="sr-only">{row.assignee?.name ?? "–"}</span> : <PersonCell row={row} />}</td>
-      <td className={`${td} whitespace-nowrap text-sm ${row.due.overdue ? "font-semibold text-danger" : "text-fg"}`}>{row.due.label}</td>
+      <td className={`${td} max-w-0`}>
+        {mine ? <RoleCell role={row.role} /> : group === "assignee" ? <span className="sr-only">{row.assignee?.name ?? "–"}</span> : <PersonCell row={row} />}
+      </td>
+      {done ? (
+        <td className={`${td} whitespace-nowrap text-sm text-fg`}>{row.doneLabel}</td>
+      ) : (
+        <td className={`${td} whitespace-nowrap text-sm ${row.due.overdue ? "font-semibold text-danger" : "text-fg"}`}>{row.due.label}</td>
+      )}
     </tr>
   );
 }
@@ -208,13 +240,16 @@ export default function AllTasksTable({ f, data }) {
     });
 
   if (!data.rows.length) {
+    const narrowed = hasNarrowing(f);
+    // Round 58: My Workspace says what is missing when nothing narrows the list.
+    const text = narrowed || f.scope !== "mine" ? "ไม่พบงานตามเงื่อนไข" : f.ws === "done" ? "ยังไม่มีงานที่เสร็จในช่วงนี้" : "ยังไม่มีงานที่ได้รับมอบหมาย";
     return (
       <div className={`${cardClass({ size: "sm" })} flex flex-col items-center gap-3 py-16 text-center`}>
         <SearchX className="size-8 text-fg-muted" aria-hidden="true" />
-        <p className="text-sm text-fg">ไม่พบงานตามเงื่อนไข</p>
-        {hasNarrowing(f) && (
+        <p className="text-sm text-fg">{text}</p>
+        {narrowed && (
           <Link
-            href={`${ALL_TASKS_PATH}${allTasksQuery(f, { ...EMPTY_MODAL_FILTERS, q: "", tab: "all" })}`}
+            href={tasksHref(f, clearedFilters(f))}
             scroll={false}
             className={buttonClass("secondary", "min-h-9")}
           >
@@ -226,6 +261,8 @@ export default function AllTasksTable({ f, data }) {
   }
 
   const sections = f.group ? data.groups : [{ key: "", rows: data.rows }];
+  const mine = f.scope === "mine";
+  const done = mine && f.ws === "done";
   const range = `${data.from}–${data.to} จาก ${data.total} งาน`;
 
   return (
@@ -241,15 +278,15 @@ export default function AllTasksTable({ f, data }) {
           <thead>
             <tr className={TABLE_HEAD}>
               <SortHeader f={f} field="task" label="Task" />
-              <th scope="col" className={th}>สถานะ</th>
-              <th scope="col" className={th}>ผู้รับผิดชอบ</th>
-              <SortHeader f={f} field="due" label="Due" />
+              <th scope="col" className={th}>{done ? "สถานะสุดท้าย" : "สถานะ"}</th>
+              <th scope="col" className={th}>{mine ? "บทบาทของฉัน" : "ผู้รับผิดชอบ"}</th>
+              {done ? <SortHeader f={f} field="done" label="เสร็จเมื่อ" /> : <SortHeader f={f} field="due" label="Due" />}
             </tr>
           </thead>
           {sections.map((g) => (
             <tbody key={g.key || "all"} className="[&_td]:border-b [&_td]:border-line-subtle">
               {f.group && <GroupHeader g={g} collapsed={collapsed.has(g.key)} onToggle={() => toggle(g.key)} />}
-              {!collapsed.has(g.key) && g.rows.map((r) => <Row key={r.id} row={r} group={f.group} />)}
+              {!collapsed.has(g.key) && g.rows.map((r) => <Row key={r.id} row={r} f={f} />)}
             </tbody>
           ))}
         </table>
@@ -261,7 +298,7 @@ export default function AllTasksTable({ f, data }) {
         <Pagination
           page={data.page}
           pages={data.pages}
-          hrefFor={(p) => `${ALL_TASKS_PATH}${allTasksQuery(f, { page: p })}`}
+          hrefFor={(p) => tasksHref(f, { page: p })}
           label="หน้า"
         />
       </div>

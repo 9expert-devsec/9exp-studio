@@ -16,7 +16,7 @@ import {
 // non-link item (aria-disabled, "Coming soon" tooltip), never a 404.
 export const NAV_ITEMS = [
   { label: "Dashboard", href: "/", icon: LayoutGrid },
-  { label: "My Workspace", href: null, icon: Briefcase },
+  { label: "My Workspace", href: "/my-workspace", icon: Briefcase },
   { label: "Projects", href: "/projects", icon: FolderKanban },
   { label: "All Tasks", href: "/all-tasks", icon: ListChecks },
   { label: "Review Queue", href: null, icon: ClipboardCheck },

@@ -15,7 +15,7 @@ import { ChevronLeft, ChevronRight, TriangleAlert } from "lucide-react";
 import TaskOpenLink from "@/components/tasks/TaskOpenLink";
 import Avatar from "@/components/ui/Avatar";
 import { cardClass } from "@/components/ui/Card";
-import { ALL_TASKS_PATH, allTasksQuery } from "@/lib/tasks/allTasksFilters";
+import { tasksHref } from "@/lib/tasks/allTasksFilters";
 import {
   MONTH_LANES,
   THAI_DAY_ABBR,
@@ -36,7 +36,7 @@ import { taskTypeTone } from "@/lib/tasks/types";
 import { TypeBadge } from "./AllTasksTable";
 import { CARD_FILL, SCROLLER, STICKY_HEAD } from "./allTasksStyles";
 
-const href = (f, changes) => `${ALL_TASKS_PATH}${allTasksQuery(f, changes)}`;
+const href = (f, changes) => tasksHref(f, changes);
 const navBtn =
   "inline-flex size-9 items-center justify-center rounded-[10px] border border-line bg-card text-fg hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-brand-500";
 const seg = "inline-flex min-h-8 items-center rounded-[9px] px-3 text-sm focus-visible:outline-2 focus-visible:outline-brand-500";

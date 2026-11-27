@@ -17,7 +17,7 @@ import Avatar from "@/components/ui/Avatar";
 import { buttonClass } from "@/components/ui/Button";
 import Combobox from "@/components/ui/Combobox";
 import Modal from "@/components/ui/Modal";
-import { ALL_TASKS_DUE, EMPTY_MODAL_FILTERS, allTasksQuery, modalFilters } from "@/lib/tasks/allTasksFilters";
+import { ALL_TASKS_DUE, EMPTY_MODAL_FILTERS, allTasksQuery, modalFilters, modalRows } from "@/lib/tasks/allTasksFilters";
 import { createLatestGuard } from "@/lib/tasks/panelUrl";
 import { STOPPED_STAGE, TASK_STAGES, enabledTaskTypes } from "@/lib/tasks/types";
 
@@ -75,7 +75,7 @@ function FilterForm({ f, projects, people, onClose, onApply }) {
   useEffect(() => {
     const t = setTimeout(() => {
       const token = guard.begin();
-      countAllTasksAction(query)
+      countAllTasksAction(query, f.scope)
         .then((res) => guard.isCurrent(token) && setCount(res?.ok ? res.count : null))
         .catch(() => guard.isCurrent(token) && setCount(null));
     }, COUNT_DEBOUNCE_MS);
@@ -83,10 +83,12 @@ function FilterForm({ f, projects, people, onClose, onApply }) {
       clearTimeout(t);
       guard.cancel();
     };
-  }, [query, guard]);
+  }, [query, guard, f.scope]);
 
   const typeOrder = enabledTaskTypes().map((t) => t.key);
-  const stageOrder = [...TASK_STAGES.map((s) => s.key), STOPPED_STAGE.key];
+  // Round 58: My Workspace hides rows (no ผู้รับผิดชอบ, no stop chip; done: no status / Due).
+  const rows = modalRows(f);
+  const stageOrder = rows.stages ?? [];
   const personOptions = [ME, ...people];
   const project = projects.find((p) => p.id === draft.project) ?? null;
   const person = personOptions.find((p) => p.id === draft.who) ?? null;
@@ -107,14 +109,19 @@ function FilterForm({ f, projects, people, onClose, onApply }) {
         ))}
       </Section>
 
-      <Section title="กลุ่มสถานะ" hint="ใช้ได้กับทุกประเภท">
-        {[...TASK_STAGES, STOPPED_STAGE].map((s) => (
-          <Chip key={s.key} dot={s.dot} selected={draft.stages.includes(s.key)} onClick={() => set({ stages: toggleIn(draft.stages, s.key, stageOrder) })}>
-            {s.label}
-          </Chip>
-        ))}
-      </Section>
+      {rows.stages && (
+        <Section title="กลุ่มสถานะ" hint="ใช้ได้กับทุกประเภท">
+          {[...TASK_STAGES, STOPPED_STAGE]
+            .filter((s) => stageOrder.includes(s.key))
+            .map((s) => (
+              <Chip key={s.key} dot={s.dot} selected={draft.stages.includes(s.key)} onClick={() => set({ stages: toggleIn(draft.stages, s.key, stageOrder) })}>
+                {s.label}
+              </Chip>
+            ))}
+        </Section>
+      )}
 
+      {rows.due && (
       <Section title="Due">
         {ALL_TASKS_DUE.map((d) => (
           <Chip key={d.key || "all"} selected={draft.due === d.key} onClick={() => set({ due: d.key, ...(d.key === "custom" ? {} : { from: "", to: "" }) })}>
@@ -122,7 +129,8 @@ function FilterForm({ f, projects, people, onClose, onApply }) {
           </Chip>
         ))}
       </Section>
-      {draft.due === "custom" && (
+      )}
+      {rows.due && draft.due === "custom" && (
         <div className="-mt-2 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-1.5 text-xs text-fg-muted">
             ตั้งแต่
@@ -158,6 +166,7 @@ function FilterForm({ f, projects, people, onClose, onApply }) {
             listLabel="โปรเจกต์"
           />
         </div>
+        {rows.who && (
         <div className="flex min-w-0 flex-col gap-2.5">
           <span id={`${id}-who`} className="text-sm font-semibold text-fg">
             ผู้รับผิดชอบ
@@ -184,6 +193,7 @@ function FilterForm({ f, projects, people, onClose, onApply }) {
             listLabel="ผู้รับผิดชอบ"
           />
         </div>
+        )}
       </div>
 
       <div className="flex flex-wrap items-center gap-2 border-t border-line pt-4">

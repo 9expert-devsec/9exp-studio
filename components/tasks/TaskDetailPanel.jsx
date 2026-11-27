@@ -914,7 +914,9 @@ function StatusColumn({ panel }) {
   const { stepper } = panel;
   const showAsset = !!panel.assetStatusLabel;
   // Tabs are controlled here: "Review <Section>" switches to Reviews and focuses that card.
-  const [tab, setTab] = useState("activity");
+  // Round 58: ?taskTab=work_plan (My Workspace Work Plan card) starts on Work Plan.
+  const startTab = useSearchParams().get("taskTab");
+  const [tab, setTab] = useState(() => (startTab === "work_plan" && panel.workPlan ? "work_plan" : "activity"));
   const [focus, setFocus] = useState(null);
   const onReview = (key) => {
     setTab("reviews");

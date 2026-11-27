@@ -7,6 +7,9 @@
 // fills what is left and its card (table or calendar) scrolls INSIDE itself —
 // the scrollbar sits inside the card frame, the column header is sticky, the
 // table footer is pinned below the scroll area. The window never scrolls.
+//
+// Round 58: also the My Workspace body (f.scope "mine"): the chips come from
+// chipsFor(f); `header` (its main tabs + cards) sits at the top of the fixed part.
 
 import Link from "next/link";
 import { TAB_BASE, TAB_IDLE_COLOR, TAB_LIST, TAB_NAV } from "@/components/projects/projectTopStyles";
@@ -15,18 +18,21 @@ import AllTasksCalendar from "./AllTasksCalendar";
 import AllTasksTable from "./AllTasksTable";
 import AllTasksToolbar from "./AllTasksToolbar";
 import { BODY, CARD_FILL, ROW_SKELETON_H, SCROLLER, STICKY_HEAD, TABLE_HEAD, TOOLBAR_H } from "./allTasksStyles";
-import { ALL_TASKS_PATH, ALL_TASKS_TABS, allTasksQuery } from "@/lib/tasks/allTasksFilters";
+import { ALL_TASKS_TABS, chipsFor, tasksHref } from "@/lib/tasks/allTasksFilters";
 import { TASK_STAGES, taskTypes } from "@/lib/tasks/types";
 
 const TOP = "flex shrink-0 flex-col gap-4";
 const COUNT = "ml-2 inline-flex min-w-6 justify-center rounded-full px-1.5 py-px text-[11px] font-semibold tabular-nums";
 
-function Tabs({ f, counts }) {
+const PILL = "inline-flex min-h-9 items-center rounded-full border px-3.5 text-sm whitespace-nowrap transition-colors focus-visible:outline-2 focus-visible:outline-brand-500";
+
+/** All Tasks: underline tabs. My Workspace (`pill`): quick chips under its main tabs. */
+function Tabs({ f, counts, chips = ALL_TASKS_TABS, pill = f?.scope === "mine" }) {
   return (
-    <nav aria-label="Task tabs" className={TAB_NAV}>
-      <ul className={`${TAB_LIST} overflow-x-auto no-scrollbar`}>
-        {ALL_TASKS_TABS.map((t) => {
-          const active = f?.tab === t.key;
+    <nav aria-label={pill ? "ตัวกรองด่วน" : "Task tabs"} className={pill ? "" : TAB_NAV}>
+      <ul className={pill ? "flex flex-wrap gap-2" : `${TAB_LIST} overflow-x-auto no-scrollbar`}>
+        {(f ? chipsFor(f) : chips).map((t, i) => {
+          const active = f ? f.tab === t.key : pill && i === 0;
           const n = counts?.[t.key];
           const tone = active ? "bg-accent-soft text-accent-fg" : t.key === "overdue" && n ? "bg-danger/15 text-danger" : "bg-track text-fg-muted";
           const body = (
@@ -35,23 +41,19 @@ function Tabs({ f, counts }) {
               <span className={`${COUNT} ${tone}`}>{n ?? <span className="invisible">00</span>}</span>
             </>
           );
+          const cls = pill
+            ? `${PILL} ${active ? "border-brand-500 bg-accent-soft font-semibold text-accent-fg" : "border-line bg-card text-fg hover:bg-card-inset"}`
+            : `${TAB_BASE} whitespace-nowrap ${
+                active ? "border-brand-500 font-semibold text-accent-fg" : `${TAB_IDLE_COLOR} hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500`
+              }`;
           return (
             <li key={t.key} className="shrink-0">
               {f ? (
-                <Link
-                  href={`${ALL_TASKS_PATH}${allTasksQuery(f, { tab: t.key })}`}
-                  scroll={false}
-                  aria-current={active ? "page" : undefined}
-                  className={`${TAB_BASE} whitespace-nowrap ${
-                    active
-                      ? "border-brand-500 font-semibold text-accent-fg"
-                      : `${TAB_IDLE_COLOR} hover:text-fg focus-visible:outline-2 focus-visible:outline-brand-500`
-                  }`}
-                >
+                <Link href={tasksHref(f, { tab: t.key })} scroll={false} aria-current={active ? "page" : undefined} className={cls}>
                   {body}
                 </Link>
               ) : (
-                <span className={`${TAB_BASE} whitespace-nowrap ${TAB_IDLE_COLOR}`}>{body}</span>
+                <span className={pill ? cls : `${TAB_BASE} whitespace-nowrap ${TAB_IDLE_COLOR}`}>{body}</span>
               )}
             </li>
           );
@@ -112,12 +114,16 @@ function CalendarLegend() {
   );
 }
 
-/** @param {{ f: object, data: object }} props  f = parseAllTasks(); data = loadAllTasks() or loadAllTasksCalendar() */
-export function AllTasksView({ f, data }) {
+/**
+ * @param {{ f: object, data: object, header?: import("react").ReactNode }} props
+ *   f = parseAllTasks(); data = loadAllTasks() or loadAllTasksCalendar(); header = My Workspace tabs + cards
+ */
+export function AllTasksView({ f, data, header = null }) {
   const calendar = f.view === "calendar";
   return (
     <>
       <div className={TOP}>
+        {header}
         <Tabs f={f} counts={data.counts} />
         <AllTasksToolbar projects={data.projects} people={data.people} />
       </div>
@@ -129,13 +135,17 @@ export function AllTasksView({ f, data }) {
   );
 }
 
-/** First visit: the same tab row, a toolbar of the same height, and the table card filling the body. */
-export function AllTasksSkeleton() {
+/**
+ * First visit: the same tab row, a toolbar of the same height, and the table card
+ * filling the body. `header` / `chips`: My Workspace's skeleton tabs + cards and its chips.
+ */
+export function AllTasksSkeleton({ header = null, chips = ALL_TASKS_TABS, pill = false }) {
   const bar = "rounded-[10px] bg-track";
   return (
     <>
       <div className={TOP} aria-hidden="true">
-        <Tabs f={null} counts={null} />
+        {header}
+        <Tabs f={null} counts={null} chips={chips} pill={pill} />
         <div className="flex animate-pulse flex-wrap items-center gap-2">
           <span className={`${TOOLBAR_H} min-w-0 flex-1 ${bar}`} />
           <span className={`${TOOLBAR_H} w-28 ${bar}`} />

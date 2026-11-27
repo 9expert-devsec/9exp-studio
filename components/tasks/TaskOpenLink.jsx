@@ -11,13 +11,13 @@ import { taskPanelUrl } from "@/lib/tasks/panelUrl";
 
 /**
  * Open (push) or swap (replace) the panel to `taskId`, keeping every other param.
- * @param {string} taskId @param {{ replace?: boolean }} [opts]
+ * @param {string} taskId @param {{ replace?: boolean, tab?: string }} [opts] tab: the starting tab (round 58)
  */
-export function openTaskPanel(taskId, { replace = false } = {}) {
+export function openTaskPanel(taskId, { replace = false, tab = "" } = {}) {
   // A click can leave a text selection / caret in the card title; clear it so
   // nothing blinks there when focus returns on close.
   window.getSelection?.()?.removeAllRanges();
-  const url = taskPanelUrl(window.location, taskId);
+  const url = taskPanelUrl(window.location, taskId, tab);
   if (replace) window.history.replaceState(null, "", url);
   else window.history.pushState(null, "", url);
 }
