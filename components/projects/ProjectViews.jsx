@@ -37,10 +37,6 @@ export function FeaturedCard({ project }) {
           <p className="mt-1.5 line-clamp-2 text-sm text-fg-muted">{project.description || "No description"}</p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
-          <span className="mt-2.5" title={statusInfo(project.status).label}>
-            <StatusDot status={project.status} />
-            <span className="sr-only">Status: {statusInfo(project.status).label}</span>
-          </span>
           <ProjectMenu project={project} className="pointer-events-auto" />
         </div>
       </div>
@@ -48,7 +44,14 @@ export function FeaturedCard({ project }) {
       <div className="pointer-events-none relative grid gap-4 rounded-[16px] bg-card-inset p-4 sm:grid-cols-3">
         <div className="min-w-0">
           <div className="flex items-center justify-between gap-2 text-xs">
-            <span className="text-fg-muted">Project progress</span>
+            {/* Round 53: the status dot sits in front of "Project progress" (was top-right).
+                pointer-events-auto so its tooltip shows (the panel above the card link is inert). */}
+            <span className="flex items-center gap-1.5 text-fg-muted">
+              <span role="img" aria-label={`Status: ${statusInfo(project.status).label}`} title={statusInfo(project.status).label} className="pointer-events-auto inline-flex">
+                <StatusDot status={project.status} />
+              </span>
+              Project progress
+            </span>
             <span className="font-semibold text-accent-fg">{project.progress}%</span>
           </div>
           <ProgressBar value={project.progress} className="mt-2.5" />
