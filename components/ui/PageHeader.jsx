@@ -10,6 +10,12 @@ import { ChevronLeft } from "lucide-react";
  * the MENU name (linked) and ends with the current page (not linked); a back
  * chevron then appears, linking to the parent crumb.
  *
+ * Back target (round 52) — derived from the trail itself, always a real link
+ * (never history back): the nearest LINKED crumb above the current page. A last
+ * crumb marked `tab: true` (e.g. "Content" / "Overview" / "Timeline" on a project)
+ * is a tab OF the crumb before it, so the current page is that crumb and back
+ * goes one level higher (Projects / <project> / Content → /projects).
+ *
  * @example
  * // A future project detail page: "Projects / JavaScript Essentials"
  * <PageHeader
@@ -23,17 +29,19 @@ import { ChevronLeft } from "lucide-react";
  *
  * @param {{
  *   title?: React.ReactNode,  // omit when the page renders its own <h1> (detail header card)
- *   breadcrumb?: { label: string, href?: string }[],
+ *   breadcrumb?: { label: string, href?: string, tab?: boolean }[],
  *   actions?: React.ReactNode,
  *   children?: React.ReactNode,
  * }} props
  */
 export default function PageHeader({ title, breadcrumb, actions, children }) {
   const trail = Array.isArray(breadcrumb) && breadcrumb.length > 0 ? breadcrumb : null;
-  // Back goes to the nearest linked crumb above the current page.
+  // Back goes to the nearest linked crumb above the current page (a trailing tab
+  // crumb belongs to the page before it).
+  const pageIndex = trail ? trail.length - 1 - (trail.at(-1)?.tab ? 1 : 0) : 0;
   const parentHref = trail
     ? trail
-        .slice(0, -1)
+        .slice(0, pageIndex)
         .reverse()
         .find((c) => c.href)?.href
     : undefined;

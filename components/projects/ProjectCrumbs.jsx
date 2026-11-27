@@ -9,6 +9,9 @@
 //   ["content", <id>]          → … / Content / {content name}
 //   ["content", <id>, "edit"]  → … / Content / Edit Content
 // The layout and the pages do the notFound() checks; this only renders labels.
+// Round 52: a trailing tab crumb (Content / Overview / Timeline) is marked
+// `tab: true`, so PageHeader's back goes to /projects (the project's parent), not
+// to the project itself.
 
 import { Suspense } from "react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -35,9 +38,9 @@ async function Crumbs({ params }) {
   ];
 
   if (rest[0] === "overview") {
-    trail.push({ label: "Overview" });
+    trail.push({ label: "Overview", tab: true });
   } else if (rest[0] === "timeline") {
-    trail.push({ label: "Timeline" });
+    trail.push({ label: "Timeline", tab: true });
   } else if (rest[0] === "content" && rest[1] === "new") {
     trail.push({ label: "Content", href }, { label: "Create Content" });
   } else if (rest[0] === "content" && rest[1] && rest[2] === "edit") {
@@ -46,7 +49,7 @@ async function Crumbs({ params }) {
     const content = await findProjectContent(ctx.project, rest[1]);
     trail.push({ label: "Content", href }, ...(content ? [{ label: content.name }] : []));
   } else {
-    trail.push({ label: "Content" });
+    trail.push({ label: "Content", tab: true });
   }
 
   return <PageHeader breadcrumb={trail} />;
