@@ -18,7 +18,7 @@ export const NAV_ITEMS = [
   { label: "Dashboard", href: "/", icon: LayoutGrid },
   { label: "My Workspace", href: null, icon: Briefcase },
   { label: "Projects", href: "/projects", icon: FolderKanban },
-  { label: "All Tasks", href: null, icon: ListChecks },
+  { label: "All Tasks", href: "/all-tasks", icon: ListChecks },
   { label: "Review Queue", href: null, icon: ClipboardCheck },
   { label: "Content Library", href: null, icon: Library },
   { label: "Post Management", href: null, icon: Megaphone },
