@@ -3,7 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { FolderKanban, Plus } from "lucide-react";
 import ProjectsToolbar from "@/components/projects/ProjectsToolbar";
-import { FeaturedCard, ProjectCard, ProjectsTable } from "@/components/projects/ProjectViews";
+import { CARD_GRID, FEATURED_GRID, FeaturedCard, PROJECTS_PAGE, ProjectCard, ProjectsTable } from "@/components/projects/ProjectViews";
 import { buttonClass } from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import PageHeader from "@/components/ui/PageHeader";
@@ -19,7 +19,7 @@ export const metadata = {
 // data, so both are read inside <Suspense> (cacheComponents; no `dynamic` export).
 export default function ProjectsPage({ searchParams }) {
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6">
+    <div className={PROJECTS_PAGE}>
       <PageHeader
         title="Projects"
         actions={
@@ -60,7 +60,7 @@ async function ProjectsData({ searchParams }) {
   return (
     <>
       {filters.view === "grid" && featured.length > 0 && (
-        <section aria-label="Featured projects" className="grid gap-4 lg:grid-cols-2">
+        <section aria-label="Featured projects" className={FEATURED_GRID}>
           {featured.map((p) => (
             <FeaturedCard key={p.id} project={p} />
           ))}
@@ -88,7 +88,7 @@ async function ProjectsData({ searchParams }) {
         ) : filters.view === "list" ? (
           <ProjectsTable projects={projects} />
         ) : (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+          <div className={CARD_GRID}>
             {projects.map((p) => (
               <ProjectCard key={p.id} project={p} />
             ))}
@@ -107,18 +107,30 @@ function ToolbarFallback() {
   return <div className="h-[33px] w-72 animate-pulse rounded-full bg-track" aria-hidden="true" />;
 }
 
+/**
+ * Mirrors the loaded grid view (round 54): the SAME featured / card grids as the
+ * page, two ~295px featured cards, the "All Projects" heading row, and 8 ~225px
+ * cards. It renders inside the page wrapper (PROJECTS_PAGE), so widths match.
+ */
 function ListSkeleton() {
   return (
-    <div className="flex animate-pulse flex-col gap-4" aria-hidden="true">
-      <div className="grid gap-4 lg:grid-cols-2">
-        <span className="h-64 rounded-[24px] bg-track" />
-        <span className="h-64 rounded-[24px] bg-track" />
-      </div>
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        {[0, 1, 2, 3].map((i) => (
-          <span key={i} className="h-40 rounded-[18px] bg-track" />
+    <>
+      <div className={`${FEATURED_GRID} animate-pulse`} aria-hidden="true">
+        {[0, 1].map((i) => (
+          <span key={i} className="block h-[295px] rounded-[24px] bg-track" />
         ))}
       </div>
-    </div>
+      <div className="flex animate-pulse flex-col gap-4" aria-hidden="true">
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="block h-6 w-32 rounded bg-track" />
+          <span className="block h-4 w-20 rounded bg-track" />
+        </div>
+        <div className={CARD_GRID}>
+          {Array.from({ length: 8 }, (_, i) => (
+            <span key={i} className="block h-[225px] rounded-[18px] bg-track" />
+          ))}
+        </div>
+      </div>
+    </>
   );
 }

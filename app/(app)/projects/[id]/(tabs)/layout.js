@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import ProjectHeaderCard from "@/components/projects/ProjectHeaderCard";
 import { PROJECT_SCROLL_ID, ProjectTabs } from "@/components/projects/ProjectSectionNav";
+import PinnedShellGuard from "@/components/shell/PinnedShellGuard";
 import { ProjectHeaderSkeleton } from "@/components/projects/Skeletons";
 import { loadProjectDetail } from "@/lib/projects/queries";
 
@@ -19,9 +20,12 @@ import { loadProjectDetail } from "@/lib/projects/queries";
 // #project-scroll (thin themed `app-scrollbar`, its bar just right of the cards).
 // The tabs reset that scroll on every page change (ProjectSectionNav.jsx). Below
 // lg the container doesn't scroll on its own: the window scrolls as before.
+// Round 54: `data-pinned-shell` is removed while this page is hidden by Next's
+// preserved-route <Activity> (PinnedShellGuard), so it never pins another page.
 export default function ProjectTabsLayout({ children, crumbs, params }) {
   return (
-    <div data-pinned-shell className="mx-auto flex w-full max-w-7xl flex-col gap-6 lg:min-h-0 lg:flex-1">
+    <div data-pinned-shell data-pinned-root className="mx-auto flex w-full max-w-7xl flex-col gap-6 lg:min-h-0 lg:flex-1">
+      <PinnedShellGuard />
       <div className="flex shrink-0 flex-col gap-6">
         {crumbs}
         <Suspense fallback={<ProjectHeaderSkeleton />}>

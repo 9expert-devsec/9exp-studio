@@ -14,6 +14,15 @@ import { AvatarStack, ProgressBar, ProjectIconTile, StatusChip, StatusDot, metaL
 
 const dimmed = (p) => (p.status === "cancelled" ? "opacity-70" : "");
 
+// Round 54: the /projects page and its loading skeleton share these, so the
+// skeleton can never drift from the real layout again.
+/** Page wrapper (w-full: never shrink to its content inside a flex parent). */
+export const PROJECTS_PAGE = "mx-auto flex w-full max-w-7xl flex-col gap-6";
+/** The two featured (pinned) cards. */
+export const FEATURED_GRID = "grid gap-4 lg:grid-cols-2";
+/** The "All Projects" card grid. */
+export const CARD_GRID = "grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4";
+
 function CardLink({ project, radius }) {
   return (
     <Link
