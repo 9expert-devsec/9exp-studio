@@ -21,6 +21,12 @@ import { ACCOUNT_ITEM, NAV_ITEMS } from "./nav";
 //
 // The pathname is read only inside <Suspense> (components/shell/PathnameBits.jsx):
 // on dynamic routes like /projects/[id] it is request-time data under cacheComponents.
+//
+// Pinned pages (round 52): a page whose content carries `data-pinned-shell` (the
+// project layout) turns the shell into a full-height column on lg+ — the window
+// never scrolls, the top bar and the page's own header stay put, and the page
+// scrolls inside its own container (lg:has-[[data-pinned-shell]]:… below). Every other page keeps
+// normal window scrolling; below lg everything scrolls the window as before.
 
 const ACCOUNT_ITEMS = [ACCOUNT_ITEM];
 
@@ -55,7 +61,7 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
   }, [open]);
 
   return (
-    <div className="flex min-h-dvh flex-1 bg-page text-fg dark:[color-scheme:dark]">
+    <div className="flex min-h-dvh flex-1 bg-page text-fg dark:[color-scheme:dark] lg:has-[[data-pinned-shell]]:h-dvh lg:has-[[data-pinned-shell]]:overflow-hidden">
       {/* Close the drawer on any route change (link, back/forward). */}
       <Suspense fallback={null}>
         <RouteChangeEffect onRouteChange={close} />
@@ -107,7 +113,7 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
         </nav>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[292px]">
+      <div className="flex min-w-0 flex-1 flex-col lg:pl-[292px] lg:has-[[data-pinned-shell]]:min-h-0">
         <header className="sticky top-0 z-20 bg-page/90 px-4 pt-4 backdrop-blur sm:px-[26px]">
           <div className="flex h-10 items-center gap-3">
             <button
@@ -132,7 +138,7 @@ export default function AppShell({ children, teamSlot, userMenuSlot }) {
           </div>
         </header>
 
-        <main className="flex-1 px-4 pb-[26px] pt-[22px] sm:px-[26px]">{children}</main>
+        <main className="flex-1 px-4 pb-[26px] pt-[22px] sm:px-[26px] lg:has-[[data-pinned-shell]]:flex lg:has-[[data-pinned-shell]]:min-h-0 lg:has-[[data-pinned-shell]]:flex-col lg:has-[[data-pinned-shell]]:pb-0">{children}</main>
       </div>
     </div>
   );

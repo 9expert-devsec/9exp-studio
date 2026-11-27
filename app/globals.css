@@ -45,8 +45,9 @@
   }
 }
 
-/* Round 52 scrollbar utility (literal class name):
-   no-scrollbar   scrolls by wheel / touch / drag / keys, no scrollbar drawn (time picker columns) */
+/* Round 52 scrollbar utilities (literal class names):
+   no-scrollbar   scrolls by wheel / touch / drag / keys, no scrollbar drawn (time picker columns)
+   app-scrollbar  thin themed scrollbar for in-app scroll areas (pinned project pages) */
 @utility no-scrollbar {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -54,6 +55,22 @@
     display: none;
   }
 }
+@utility app-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ds-line) transparent;
+  &::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background: var(--ds-line);
+    border-radius: 9999px;
+  }
+}
+
 /* Semantic tokens: light on :root, dark on .dark (class set on <html> before paint). */
 :root {
   --ds-page: #f8fafd;

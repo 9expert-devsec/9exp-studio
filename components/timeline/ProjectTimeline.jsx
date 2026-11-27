@@ -142,10 +142,11 @@ export default function ProjectTimeline({ viewerId, projectId, contentHref, cont
 
   // Card height: bounded to the viewport below the card's own top (document offset,
   // measured — no fixed numbers), written as --tl-top on the card. Re-measured when
-  // anything above it changes size (body resize) or the window resizes. The page
-  // scroller is the window (AppShell has no inner scroll container: the shell is
-  // min-h-dvh in normal flow, the top bar is sticky to the viewport), so rect.top +
-  // scrollY is the document offset and does not change while the page scrolls.
+  // anything above it changes size (body resize) or the window resizes. Below lg
+  // the page scroller is the window, so rect.top + scrollY is the document offset.
+  // On lg+ (round 52) the project pages scroll inside #project-scroll, which every
+  // page change resets to the top: rect.top is then the card's offset under the
+  // pinned header (window.scrollY stays 0), and the card still fits the viewport.
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!card) return;
