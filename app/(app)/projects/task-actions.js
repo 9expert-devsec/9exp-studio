@@ -46,7 +46,9 @@ import { needsSubmit, reviewMoveOpts } from "@/lib/tasks/reviews";
 import { deleteReviews, withdrawOpenCycle } from "@/lib/tasks/reviewStore";
 import { deleteComments } from "@/lib/tasks/comments";
 import { deleteWorkEntries } from "@/lib/tasks/workplanStore";
-import { flowAction, parseShoot } from "@/lib/tasks/statusView";
+import { flowAction, parseArticlePublish, parsePostLinks, parseShoot, postLinksComplete } from "@/lib/tasks/statusView";
+import { recheckAssetDependents, recheckAssetTask, readinessOf } from "@/lib/tasks/assetFlowStore";
+import { draftExitTarget } from "@/lib/tasks/assets";
 import { folderSuffixForType, parseFolderId } from "@/lib/tasks/folderId";
 import TaskFolder from "@/models/TaskFolder";
 import { deleteTaskPhoto, signTaskPhotoUpload, isOwnTaskPhotoId } from "@/lib/cloudinary";
@@ -287,6 +289,12 @@ export async function updateTaskAction(formData) {
   // save (so Cancel never loses a saved photo).
   if (extra.values) await deletePhotos(removedPhotoIds(task.details, extra.values.details));
 
+  // Round 49: an Article / Post whose asset list changed — re-check รอชิ้นงาน.
+  const assetKey = (d) => (d?.relatedAssets ?? []).map(String).join(",");
+  if ((task.type === "article" || task.type === "post") && extra.values && assetKey(task.details) !== assetKey(set.details)) {
+    await recheckAssetTask({ ...task, details: set.details });
+  }
+
   // Round 45: a Clip edited to link ANOTHER Production that is already done →
   // รอตัดต่อ (only when the link changed; the rule checks it is at รอ Source).
   const linkBefore = String(task.details?.relatedProductionId ?? "");
@@ -358,6 +366,10 @@ export async function changeTaskStatusAction(formData) {
   if (task.type === "production") await applySourceReady({ ...task, status });
   // Round 46: left รอตรวจ by an escape hatch → the open review cycle is withdrawn.
   await withdrawOpenCycle(task, { from: task.status, to: status, actor: viewer.id });
+  // Round 49: any status change may complete someone's assets; Set status… to
+  // รอชิ้นงาน re-checks the task itself at once.
+  await recheckAssetDependents([task._id]);
+  if (status === "waiting_assets") await recheckAssetTask({ ...task, status });
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -392,12 +404,20 @@ export async function runFlowAction(formData) {
 
   const actionId = str(formData.get("actionId"));
   const a = flowAction(task.type, actionId);
-  if (!a || a.dialog === "shoot") return fail("This action isn't available for this task.");
+  if (!a || ["shoot", "publish", "postLinks"].includes(a.dialog)) return fail("This action isn't available for this task.");
   if (task.status !== a.from) return fail("This task's status just changed. Reload and try again.");
-  const move = canTransition(task.type, task.status, a.to, moveOpts(viewer, project, task));
+  // Round 49 draft exit: รอชิ้นงาน while an asset is pending, else รอเผยแพร่.
+  let to = a.to;
+  const set = { statusBeforeHold: null, updatedBy: viewer.id };
+  if (a.branch) {
+    const readiness = await readinessOf(task);
+    to = draftExitTarget(readiness);
+    set["flow.draftExit"] = readiness.total === 0 ? "no_assets" : readiness.allReady ? "skipped" : "waited";
+    set["flow.assetsAtExit"] = readiness.total;
+  }
+  const move = canTransition(task.type, task.status, to, { ...moveOpts(viewer, project, task), ...(a.branch ? { hasRelatedAssets: true, allowAuto: true } : {}) });
   if (!move.ok) return fail(move.reason);
-
-  const set = { status: a.to, statusBeforeHold: null, updatedBy: viewer.id };
+  set.status = to;
   if (a.stamp) set[`flow.${a.stamp}`] = new Date();
   let fileLocation = "";
   if (a.dialog === "fileLocation") {
@@ -419,10 +439,11 @@ export async function runFlowAction(formData) {
     project: project._id,
     actor: viewer.id,
     type: "status_changed",
-    data: { from: task.status, to: a.to, action: actionId, ...(fileLocation ? { fileLocation } : {}) },
+    data: { from: task.status, to, action: actionId, ...(fileLocation ? { fileLocation } : {}) },
   });
   // Round 45 automation, unchanged: Production เสร็จสมบูรณ์ → linked Clips at รอ Source.
-  if (task.type === "production") await applySourceReady({ ...task, status: a.to });
+  if (task.type === "production") await applySourceReady({ ...task, status: to });
+  await recheckAssetDependents([task._id]); // round 49
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();
@@ -471,10 +492,113 @@ export async function setShootAction(formData) {
       a ? { ...base, type: "status_changed", data: { from: task.status, to: a.to, action: "set_shoot" } } : null,
     ].filter(Boolean)
   );
-  if (a) await recomputeRollups({ projectId: project._id, contentId: content._id });
+  if (a) {
+    await recomputeRollups({ projectId: project._id, contentId: content._id });
+    await recheckAssetDependents([task._id]); // round 49 (every status write)
+  }
   refresh();
   return { ok: true };
 }
+
+/**
+ * Article "บันทึกการเผยแพร่" (round 49): ลิงก์บทความ* (http/https) + วันเวลาที่
+ * เผยแพร่* → Task.flow.publishedUrl / publishedAt and รอเผยแพร่ → เผยแพร่แล้ว.
+ * Same right as Change status. Form: projectId, contentId, taskId, url, date, time.
+ */
+export async function publishArticleAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  const { viewer, project, content } = scope;
+  const task = await findContentTask(project, content, str(formData.get("taskId")));
+  if (!task) return fail(TASK_NOT_FOUND);
+  if (task.type !== "article") return fail("Only articles are published here.");
+  if (!canChangeTaskStatus(viewer, project, task)) return fail(project.status === "cancelled" ? PROJECT_CANCELLED : STATUS_DENIED);
+  const a = flowAction("article", "publish");
+  if (task.status !== a.from) return fail("This task's status just changed. Reload and try again.");
+  const move = canTransition(task.type, task.status, a.to, moveOpts(viewer, project, task));
+  if (!move.ok) return fail(move.reason);
+  const parsed = parseArticlePublish({ url: str(formData.get("url")), date: str(formData.get("date")), time: str(formData.get("time")) });
+  if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
+
+  const res = await Task.updateOne(
+    { _id: task._id, content: content._id, project: project._id, status: task.status },
+    {
+      $set: {
+        status: a.to,
+        statusBeforeHold: null,
+        updatedBy: viewer.id,
+        "flow.publishedUrl": parsed.value.url,
+        "flow.publishedAt": parsed.value.publishedAt,
+      },
+    }
+  );
+  if (!res.matchedCount) return fail("This task's status just changed. Reload and try again.");
+  await logActivity({
+    task: task._id,
+    project: project._id,
+    actor: viewer.id,
+    type: "status_changed",
+    data: { from: task.status, to: a.to, action: "publish", publishedUrl: parsed.value.url },
+  });
+  await recomputeRollups({ projectId: project._id, contentId: content._id });
+  await recheckAssetDependents([task._id]); // an Article can be a Post's asset
+  refresh();
+  return { ok: true };
+}
+
+/**
+ * Post "บันทึกการโพสต์" (round 49): one link per platform of the post (partial
+ * saves allowed; a saved link is kept unless replaced). Once EVERY platform has
+ * a link, รอเผยแพร่ → เผยแพร่แล้ว. Same right as Change status.
+ * Form: projectId, contentId, taskId, links (JSON [{ platformId, url, date, time }]).
+ * Errors: fieldErrors { "<platformId>": message }.
+ */
+export async function savePostLinksAction(formData) {
+  const scope = await loadScope(formData);
+  if (scope.error) return fail(scope.error);
+  const { viewer, project, content } = scope;
+  const task = await findContentTask(project, content, str(formData.get("taskId")));
+  if (!task) return fail(TASK_NOT_FOUND);
+  if (task.type !== "post") return fail("Only posts are published here.");
+  if (!canChangeTaskStatus(viewer, project, task)) return fail(project.status === "cancelled" ? PROJECT_CANCELLED : STATUS_DENIED);
+  const a = flowAction("post", "post_links");
+  if (task.status !== a.from) return fail("This task's status just changed. Reload and try again.");
+
+  const platformIds = [task.details?.platform].filter(Boolean).map(String);
+  let raw = [];
+  try {
+    raw = JSON.parse(str(formData.get("links")) || "[]");
+  } catch {
+    raw = [];
+  }
+  const parsed = parsePostLinks(raw, platformIds);
+  if (parsed.errors) return fail(CHECK_FIELDS, parsed.errors);
+  const byId = new Map((task.flow?.publishLinks ?? []).map((l) => [String(l.platformId), l]));
+  for (const l of parsed.value) byId.set(l.platformId, l);
+  const links = platformIds.map((id) => byId.get(id)).filter(Boolean);
+  const platforms = platformIds.map((id) => ({ id }));
+  const complete = postLinksComplete(platforms, links);
+  if (complete) {
+    const move = canTransition(task.type, task.status, a.to, moveOpts(viewer, project, task));
+    if (!move.ok) return fail(move.reason);
+  }
+
+  const res = await Task.updateOne(
+    { _id: task._id, content: content._id, project: project._id, status: task.status },
+    { $set: { "flow.publishLinks": links, updatedBy: viewer.id, ...(complete ? { status: a.to, statusBeforeHold: null } : {}) } }
+  );
+  if (!res.matchedCount) return fail("This task's status just changed. Reload and try again.");
+  const base = { task: task._id, project: project._id, actor: viewer.id };
+  await logActivity(
+    complete
+      ? { ...base, type: "status_changed", data: { from: task.status, to: a.to, action: "post_links", links: links.length } }
+      : { ...base, type: "post_links", data: { saved: links.length, total: platformIds.length } }
+  );
+  if (complete) await recomputeRollups({ projectId: project._id, contentId: content._id });
+  refresh();
+  return { ok: true, published: complete };
+}
+
 
 /** Hard delete, reached only through the confirm dialog (task ⋯ → Delete task). */
 export async function deleteTaskAction(formData) {
@@ -500,6 +624,7 @@ export async function deleteTaskAction(formData) {
   await deleteReviews([task._id]);
   await deleteComments([task._id]);
   await deleteWorkEntries([task._id]);
+  await recheckAssetDependents([task._id]); // round 49: a deleted asset no longer counts
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
   refresh();

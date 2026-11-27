@@ -799,6 +799,8 @@ const STEP_DOT = {
   current: "border-brand-500 bg-brand-500 text-navy ring-4 ring-brand-500/20",
   // Round 45: Clip แก้ไข sits on "ตรวจงาน" with a warning (frame 341:2231).
   warning: "border-warning bg-warning/15 text-warning ring-4 ring-warning/15",
+  // Round 49: Article / Post รอชิ้นงาน before it is reached — "(ถ้ามี)".
+  optional: "border-dashed border-line bg-card text-fg-muted",
   upcoming: "border-line bg-card text-fg-muted",
   muted: "border-line bg-track text-fg-muted",
 };
@@ -806,6 +808,7 @@ const STEP_LABEL = {
   complete: "text-fg",
   current: "rounded-full bg-accent-soft px-2 py-0.5 font-semibold text-accent-fg",
   warning: "font-semibold text-warning",
+  optional: "text-fg-muted",
   upcoming: "text-fg-muted",
   muted: "text-fg-muted",
 };
@@ -835,7 +838,7 @@ function Stepper({ stepper }) {
             <span className={`text-xs ${STEP_LABEL[s.state]}`}>
               {s.label}
               <span className="sr-only">{STEP_SR[s.state] ?? ""}</span>
-              {s.note && <span className="block text-[11px] font-medium">{s.note}</span>}
+              {s.note && <span className={`block text-[11px] font-medium ${s.noteTone === "success" ? "text-success" : ""}`}>{s.note}</span>}
             </span>
           </li>
         ))}

@@ -27,6 +27,7 @@ import { recomputeRollups } from "@/lib/projects/progress";
 import { canOverrideTaskStatus } from "@/lib/permissions";
 import { logActivity } from "@/lib/tasks/activity";
 import { loadCycles } from "@/lib/tasks/reviewStore";
+import { recheckAssetDependents } from "@/lib/tasks/assetFlowStore";
 import {
   REVIEW_STATUS,
   buildCycle,
@@ -216,6 +217,7 @@ export async function submitReviewAction(formData) {
   ]);
 
   await recomputeRollups({ projectId: project._id, contentId: content._id });
+  await recheckAssetDependents([task._id]); // round 49: every status write
   refresh();
   return { ok: true };
 }
@@ -287,6 +289,8 @@ export async function recordVerdictAction(formData) {
           data: { from: REVIEW_STATUS.review, to: outcome.to, review: { cycleNo: cycle.cycleNo, result: outcome.result } },
         });
         await recomputeRollups({ projectId: project._id, contentId: content._id });
+        // Round 49: a Clip / Graphic now เสร็จสมบูรณ์ may complete an Article / Post.
+        await recheckAssetDependents([task._id]);
       }
     }
   }

@@ -1,7 +1,8 @@
 "use client";
 
-// Current Status box + action card for Production / Graphic / Photo (round 48,
-// Figma 355:3579). Everything it shows comes from lib/tasks/statusView.js
+// Current Status box + action card for Production / Graphic / Photo (round 48)
+// and Article / Post (round 49: amber "asset not ready" banner above it, the
+// publish dialogs, open links) — Figma 355:3579. Everything it shows comes from lib/tasks/statusView.js
 // (panel.statusView); the look matches the Clip card (round 45): lock + coloured
 // icon tile + Thai status name + muted sub-line | full-width orange button + hint
 // (or an outlined Copy button, a hint only, or an info card).
@@ -11,10 +12,32 @@
 // review dialog; review → the Reviews tab; copy → clipboard.
 
 import { useState, useTransition } from "react";
-import { CalendarDays, Camera, CircleCheck, Clock, Copy, Eye, FolderOpen, Loader2, Lock, Palette, PauseCircle, TriangleAlert, XCircle } from "lucide-react";
+import {
+  CalendarDays,
+  Camera,
+  CircleCheck,
+  Clock,
+  Copy,
+  ExternalLink,
+  Eye,
+  FolderOpen,
+  Globe,
+  Loader2,
+  Lock,
+  Package,
+  Palette,
+  PauseCircle,
+  Pencil,
+  RefreshCw,
+  Send,
+  TriangleAlert,
+  XCircle,
+} from "lucide-react";
 import { runFlowAction, setShootAction } from "@/app/(app)/projects/task-actions";
 import { invalidateTaskPanel } from "@/components/tasks/panelCache";
 import ReviewDialog from "@/components/tasks/ReviewDialog";
+import PlatformIcon from "@/components/tasks/PlatformIcon";
+import { PostLinksDialog, PublishArticleDialog } from "@/components/tasks/PublishDialogs";
 import ShootFields from "@/components/tasks/ShootFields";
 import { buttonClass } from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -32,6 +55,10 @@ const ICON = {
   check: { Icon: CircleCheck, tone: "bg-success/15 text-success" },
   pause: { Icon: PauseCircle, tone: "bg-warning/15 text-warning" },
   x: { Icon: XCircle, tone: "bg-danger/10 text-danger" },
+  pencil: { Icon: Pencil, tone: "bg-accent-soft text-accent-fg" },
+  box: { Icon: Package, tone: "bg-accent-soft text-accent-fg" },
+  send: { Icon: Send, tone: "bg-accent-soft text-accent-fg" },
+  globe: { Icon: Globe, tone: "bg-success/15 text-success" },
 };
 
 const ids = (panel) => {
@@ -50,6 +77,17 @@ export default function TypeStatusCard({ panel, onReview }) {
   const { Icon, tone } = ICON[v.box.icon] ?? ICON.clock;
   const action = v.action;
   return (
+    <>
+    {v.banner && (
+      // Round 49: รอเผยแพร่ with a not-ready asset — the status never steps back on its own.
+      <div role="status" className="mt-4 flex gap-2.5 rounded-[12px] border border-warning/40 bg-warning/10 px-3.5 py-2.5">
+        <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warning" aria-hidden="true" />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-warning">{v.banner.title}</p>
+          <p className="break-words text-xs text-fg">{v.banner.line}</p>
+        </div>
+      </div>
+    )}
     <div className={`mt-4 grid gap-3 ${action ? "sm:grid-cols-2" : ""}`}>
       <div className="flex gap-3 rounded-[14px] bg-card-inset p-3.5">
         <span aria-hidden="true" className={`flex size-10 shrink-0 items-center justify-center rounded-full ${tone}`}>
@@ -69,6 +107,7 @@ export default function TypeStatusCard({ panel, onReview }) {
       </div>
       {action && <ActionCard panel={panel} action={action} onReview={onReview} />}
     </div>
+    </>
   );
 }
 
@@ -77,7 +116,11 @@ function ActionCard({ panel, action, onReview }) {
     return (
       <div className="flex min-w-0 flex-col justify-center gap-1 rounded-[14px] border border-line p-3.5">
         <p className="flex items-center gap-1.5 text-sm font-semibold text-fg">
-          <CircleCheck className="size-4 text-success" aria-hidden="true" />
+          {action.info.icon === "auto" ? (
+            <RefreshCw className="size-4 text-accent-fg" aria-hidden="true" />
+          ) : (
+            <CircleCheck className="size-4 text-success" aria-hidden="true" />
+          )}
           {action.info.title}
         </p>
         <p className="text-xs text-fg-muted">{action.info.line}</p>
@@ -88,7 +131,7 @@ function ActionCard({ panel, action, onReview }) {
   return (
     <div className="flex min-w-0 flex-col justify-center gap-2 rounded-[14px] border border-line p-3.5">
       {action.button && <ActionButton panel={panel} button={action.button} outline={action.kind === "outline"} onReview={onReview} />}
-      <p title={isCopy ? action.button.value || undefined : undefined} className="text-xs text-fg-muted">
+      <p title={isCopy || action.truncateHint ? action.button?.value || action.hint : undefined} className={`text-xs text-fg-muted ${action.truncateHint ? "truncate" : ""}`}>
         {action.hint}
       </p>
       {action.link && <ShootLink panel={panel} label={action.link.label} />}
@@ -130,6 +173,13 @@ function ActionButton({ panel, button, outline, onReview }) {
       case "review":
         onReview?.(button.section);
         return;
+      case "open_url":
+        if (button.value) window.open(button.value, "_blank", "noopener,noreferrer");
+        return;
+      case "publish":
+      case "post_links":
+        setDialog(button.actionId);
+        return;
       case "submit":
       case "resubmit":
       case "set_shoot":
@@ -141,18 +191,61 @@ function ActionButton({ panel, button, outline, onReview }) {
     }
   };
 
+  // "เปิดโพสต์": one platform opens directly, several open a small menu.
+  if (button.actionId === "open_posts" && (button.links?.length ?? 0) > 1) return <OpenPostsMenu button={button} className={cls} />;
+  const icon =
+    button.actionId === "copy" ? <Copy className="size-4" aria-hidden="true" /> : button.actionId.startsWith("open_") ? <ExternalLink className="size-4" aria-hidden="true" /> : null;
   return (
     <>
-      <button type="button" onClick={onClick} disabled={pending || !!button.disabled} className={cls}>
-        {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : button.actionId === "copy" ? <Copy className="size-4" aria-hidden="true" /> : null}
+      <button
+        type="button"
+        onClick={button.actionId === "open_posts" ? () => button.links?.[0] && window.open(button.links[0].url, "_blank", "noopener,noreferrer") : onClick}
+        disabled={pending || !!button.disabled}
+        className={cls}
+      >
+        {pending ? <Loader2 className="size-4 animate-spin" aria-hidden="true" /> : icon}
         {button.label}
       </button>
+      {dialog === "publish" && <PublishArticleDialog panel={panel} open onClose={close} />}
+      {dialog === "post_links" && <PostLinksDialog panel={panel} open onClose={close} />}
       {(dialog === "submit" || dialog === "resubmit") && (
         <ReviewDialog task={{ id: panel.id, projectId: panel.projectId, contentId: panel.contentId }} open onClose={close} mode={dialog} />
       )}
       {dialog === "set_shoot" && <ShootDialog panel={panel} open onClose={close} advance />}
       {dialog === "fileLocation" && <FileLocationDialog panel={panel} open onClose={close} onSave={(fl) => run({ fileLocation: fl })} />}
     </>
+  );
+}
+
+function OpenPostsMenu({ button, className }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button type="button" onClick={() => setOpen((x) => !x)} aria-expanded={open} aria-haspopup="menu" className={className}>
+        <ExternalLink className="size-4" aria-hidden="true" />
+        {button.label}
+      </button>
+      {open && (
+        <ul role="menu" className="absolute left-0 right-0 z-20 mt-1 rounded-[12px] border border-line bg-card p-1 shadow-xl">
+          {button.links.map((l) => (
+            <li key={l.id} role="none">
+              <a
+                role="menuitem"
+                href={l.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 rounded-[8px] px-2.5 py-2 text-sm text-fg hover:bg-card-inset focus-visible:outline-2 focus-visible:outline-brand-500"
+              >
+                <PlatformIcon icon={l.icon} size={16} />
+                {l.label}
+                <span className="sr-only">(opens in a new tab)</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
   );
 }
 

@@ -31,6 +31,7 @@ import { deleteActivity, logActivity } from "@/lib/tasks/activity";
 import { deleteReviews } from "@/lib/tasks/reviewStore";
 import { deleteComments } from "@/lib/tasks/comments";
 import { deleteWorkEntries } from "@/lib/tasks/workplanStore";
+import { recheckAssetDependents } from "@/lib/tasks/assetFlowStore";
 import { getTaskType } from "@/lib/tasks/types";
 import Content from "@/models/Content";
 import Task from "@/models/Task";
@@ -233,6 +234,7 @@ export async function deleteContentAction(formData) {
   await deleteReviews(taskIds);
   await deleteComments(taskIds);
   await deleteWorkEntries(taskIds);
+  await recheckAssetDependents(taskIds); // round 49: deleted assets no longer count
   await Content.deleteOne({ _id: content._id, project: project._id });
   await recomputeRollups({ projectId: project._id });
 
